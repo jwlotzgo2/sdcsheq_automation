@@ -76,7 +76,6 @@ export default function LoginPage() {
   const [loading, setLoading]   = useState(false)
   const [sent, setSent]         = useState(false)
   const [error, setError]       = useState('')
-  const [exchanging, setExchanging] = useState(false)
   const [mounted, setMounted]   = useState(false)
   const isMobile = useIsMobile()
 
@@ -87,32 +86,16 @@ export default function LoginPage() {
 
   useEffect(() => { setMounted(true) }, [])
 
-  useEffect(() => {
-    const code = new URLSearchParams(window.location.search).get('code')
-    if (!code) return
-    setExchanging(true)
-    supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
-      if (error) { setError('Sign-in link expired.'); setExchanging(false) }
-      else if (data?.session) window.location.href = '/dashboard'
-    })
-  }, [])
-
   const handleLogin = async () => {
     if (!email) return
     setLoading(true); setError('')
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/login` },
+      options: { emailRedirectTo: `${window.location.origin}/api/auth/callback` },
     })
     if (error) { setError(error.message); setLoading(false) }
     else { setSent(true); setLoading(false) }
   }
-
-  if (exchanging) return (
-    <div style={{ minHeight: '100vh', backgroundColor: DARK, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Arial, sans-serif' }}>
-      <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '14px' }}>Signing you in...</p>
-    </div>
-  )
 
   if (!mounted) return <div style={{ minHeight: '100vh', backgroundColor: DARK }} />
 
