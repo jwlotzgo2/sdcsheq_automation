@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import AppShell from '@/components/layout/AppShell'
 import { useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 
 const AMBER  = '#E8960C'
 const DARK   = '#2A2A2A'
@@ -30,7 +31,7 @@ function useIsMobile() {
   return isMobile
 }
 
-export default function SettingsPage() {
+function SettingsContent() {
   const isMobile = useIsMobile()
   const [xeroSettings, setXeroSettings] = useState<any>(null)
   const [loading, setLoading]           = useState(true)
@@ -202,5 +203,13 @@ export default function SettingsPage() {
         </div>
       </div>
     </AppShell>
+  )
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <SettingsContent />
+    </Suspense>
   )
 }
