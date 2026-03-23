@@ -29,6 +29,14 @@ function useIsMobile() {
 
 
 const StepGrid = memo(({ isMobile }: { isMobile: boolean }) => {
+  const [activeStep, setActiveStep] = useState(0)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveStep(prev => (prev + 1) % STEPS.length)
+    }, 1800)
+    return () => clearInterval(interval)
+  }, [])
+
   if (isMobile) {
     return (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '28px' }}>

@@ -1,7 +1,7 @@
 {
   "name": "GoAutomate — SDC SHEQ",
   "short_name": "GoAutomate",
-  "description": "AP Automation for SDC SHEQ — invoice processing and approval workflow",
+  "description": "AP Automation for SDC SHEQ",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#2A2A2A",
