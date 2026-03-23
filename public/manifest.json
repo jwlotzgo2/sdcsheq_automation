@@ -1,0 +1,36 @@
+{
+  "name": "GoAutomate — SDC SHEQ",
+  "short_name": "GoAutomate",
+  "description": "AP Automation for SDC SHEQ — invoice processing and approval workflow",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#2A2A2A",
+  "theme_color": "#E8960C",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Review Queue",
+      "url": "/review",
+      "description": "Review pending invoices"
+    },
+    {
+      "name": "Approve Queue",
+      "url": "/approve",
+      "description": "Approve invoices"
+    }
+  ]
+}
