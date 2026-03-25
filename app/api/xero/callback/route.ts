@@ -1,5 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createCipheriv, randomBytes } from 'crypto'
+
+
+function encrypt(plaintext: string): string {
+  const hex = process.env.XERO_ENCRYPTION_KEY!
+  const key = Buffer.from(hex, 'hex')
+  const iv  = randomBytes(12)
+  const cipher = createCipheriv('aes-256-gcm', key, iv)
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()])
+  const tag = cipher.getAuthTag()
+  return `${iv.toString('hex')}:${tag.toString('hex')}:${encrypted.toString('hex')}`
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -67,8 +79,8 @@ export async function GET(request: NextRequest) {
       id:              '00000000-0000-0000-0000-000000000001', // singleton row
       tenant_id:       tenant.tenantId,
       tenant_name:     tenant.tenantName,
-      access_token,
-      refresh_token,
+      access_token:  encrypt(access_token),
+      refresh_token: encrypt(refresh_token),
       token_expires_at: expiresAt,
       connected_at:    new Date().toISOString(),
       updated_at:      new Date().toISOString(),

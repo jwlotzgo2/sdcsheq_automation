@@ -1,4 +1,31 @@
 import { createClient } from '@supabase/supabase-js'
+import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
+
+const ALGO = 'aes-256-gcm'
+
+function getKey(): Buffer {
+  const hex = process.env.XERO_ENCRYPTION_KEY
+  if (!hex || hex.length !== 64) throw new Error('XERO_ENCRYPTION_KEY must be 64 hex chars (32 bytes)')
+  return Buffer.from(hex, 'hex')
+}
+
+function encrypt(plaintext: string): string {
+  const iv  = randomBytes(12)
+  const cipher = createCipheriv(ALGO, getKey(), iv)
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()])
+  const tag = cipher.getAuthTag()
+  // Format: iv(24):tag(32):ciphertext
+  return `${iv.toString('hex')}:${tag.toString('hex')}:${encrypted.toString('hex')}`
+}
+
+function decrypt(ciphertext: string): string {
+  const [ivHex, tagHex, dataHex] = ciphertext.split(':')
+  if (!ivHex || !tagHex || !dataHex) return ciphertext // not encrypted, return as-is
+  const decipher = createDecipheriv(ALGO, getKey(), Buffer.from(ivHex, 'hex'))
+  decipher.setAuthTag(Buffer.from(tagHex, 'hex'))
+  return decipher.update(Buffer.from(dataHex, 'hex')).toString('utf8') + decipher.final('utf8')
+}
+
 
 function getSupabase() {
   return createClient(
@@ -29,7 +56,7 @@ export async function getXeroToken(): Promise<{ accessToken: string; tenantId: s
   const needsRefresh = Date.now() > expiresAt - bufferMs
 
   if (!needsRefresh) {
-    return { accessToken: settings.access_token, tenantId: settings.tenant_id }
+    return { accessToken: decrypt(settings.access_token), tenantId: settings.tenant_id }
   }
 
   // Refresh the token
@@ -45,7 +72,7 @@ export async function getXeroToken(): Promise<{ accessToken: string; tenantId: s
     },
     body: new URLSearchParams({
       grant_type:    'refresh_token',
-      refresh_token: settings.refresh_token,
+      refresh_token: decrypt(settings.refresh_token),
     }),
   })
 
@@ -58,8 +85,8 @@ export async function getXeroToken(): Promise<{ accessToken: string; tenantId: s
   const expiresAt2 = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
 
   await supabase.from('xero_settings').update({
-    access_token:    tokens.access_token,
-    refresh_token:   tokens.refresh_token,
+    access_token:    encrypt(tokens.access_token),
+    refresh_token:   encrypt(tokens.refresh_token),
     token_expires_at: expiresAt2,
     updated_at:      new Date().toISOString(),
   }).eq('id', '00000000-0000-0000-0000-000000000001')
