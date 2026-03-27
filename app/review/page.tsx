@@ -41,6 +41,12 @@ export default function ReviewPage() {
   const [loadingDetail, setLoadingDetail]   = useState(false)
   const [mobileView, setMobileView]         = useState<'list' | 'detail' | 'pdf'>('list')
   const [showPdf, setShowPdf]               = useState(false)
+  const [showCreateSupplier, setShowCreateSupplier] = useState(false)
+  const [newSupplierName, setNewSupplierName]       = useState('')
+  const [newSupplierEmail, setNewSupplierEmail]     = useState('')
+  const [newSupplierVat, setNewSupplierVat]         = useState('')
+  const [creatingSupplier, setCreatingSupplier]     = useState(false)
+  const [createError, setCreateError]               = useState('')
   const isMobile = useIsMobile()
 
   const supabase = createBrowserClient(
@@ -97,6 +103,24 @@ export default function ReviewPage() {
 
   const updateLine = (index: number, field: string, value: any) => {
     setLines(prev => prev.map((l, i) => i === index ? { ...l, [field]: value } : l))
+  }
+
+  const handleCreateSupplier = async () => {
+    if (!newSupplierName) return
+    setCreatingSupplier(true); setCreateError('')
+    const res = await fetch('/api/xero/create-supplier', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newSupplierName, email: newSupplierEmail, vat_number: newSupplierVat }),
+    })
+    const data = await res.json()
+    if (data.error) { setCreateError(data.error); setCreatingSupplier(false); return }
+    // Add to suppliers list and auto-select
+    setSuppliers(prev => [...prev, data.supplier])
+    setSelectedSupplier(data.supplier.id)
+    setShowCreateSupplier(false)
+    setNewSupplierName(''); setNewSupplierEmail(''); setNewSupplierVat('')
+    setCreatingSupplier(false)
   }
 
   const handleSubmit = async () => {
@@ -248,6 +272,12 @@ export default function ReviewPage() {
                     <option value="">— Select supplier —</option>
                     {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}{s.vat_number ? ` · ${s.vat_number}` : ''}</option>)}
                   </select>
+                  {!selectedSupplier && (
+                    <button onClick={() => { setNewSupplierName(selected?.supplier_name ?? ''); setShowCreateSupplier(true) }}
+                      style={{ width: '100%', padding: '10px', borderRadius: '8px', border: `1.5px solid #13B5EA`, backgroundColor: WHITE, color: '#13B5EA', fontSize: '13px', fontWeight: '600', cursor: 'pointer', marginTop: '8px' }}>
+                      + Create supplier in Xero
+                    </button>
+                  )}
                 </div>
 
                 {/* View PDF button */}
@@ -383,10 +413,18 @@ export default function ReviewPage() {
                       </div>
                     ))}
                   </div>
-                  <select value={selectedSupplier} onChange={e => setSelectedSupplier(e.target.value)} style={{ width: '100%', padding: '5px 8px', fontSize: '12px', border: `1.5px solid ${BORDER}`, borderRadius: '6px', backgroundColor: WHITE, color: DARK }}>
-                    <option value="">— Select supplier —</option>
-                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}{s.vat_number ? ` · ${s.vat_number}` : ''}</option>)}
-                  </select>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <select value={selectedSupplier} onChange={e => setSelectedSupplier(e.target.value)} style={{ flex: 1, padding: '5px 8px', fontSize: '12px', border: `1.5px solid ${BORDER}`, borderRadius: '6px', backgroundColor: WHITE, color: DARK }}>
+                      <option value="">— Select supplier —</option>
+                      {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}{s.vat_number ? ` · ${s.vat_number}` : ''}</option>)}
+                    </select>
+                    {!selectedSupplier && (
+                      <button onClick={() => { setNewSupplierName(selected?.supplier_name ?? ''); setShowCreateSupplier(true) }}
+                        style={{ padding: '5px 10px', borderRadius: '6px', border: `1.5px solid #13B5EA`, backgroundColor: WHITE, color: '#13B5EA', fontSize: '11px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        + Xero
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Line items — compact */}
@@ -446,6 +484,45 @@ export default function ReviewPage() {
           </div>
         </div>
       </div>
+      {/* Create Supplier Modal */}
+      {showCreateSupplier && (
+        <div onClick={() => !creatingSupplier && setShowCreateSupplier(false)}
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ backgroundColor: '#F5F5F2', borderRadius: '12px', padding: '28px', width: '100%', maxWidth: '440px', boxShadow: '0 24px 80px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#2A2A2A', margin: 0 }}>Create Supplier in Xero</h2>
+              {!creatingSupplier && <button onClick={() => setShowCreateSupplier(false)} style={{ background: 'none', border: 'none', fontSize: '20px', color: '#8A8878', cursor: 'pointer' }}>×</button>}
+            </div>
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#2A2A2A', marginBottom: '4px' }}>Supplier Name *</label>
+              <input value={newSupplierName} onChange={e => setNewSupplierName(e.target.value)}
+                style={{ width: '100%', padding: '9px 12px', fontSize: '14px', border: '1.5px solid #E2E0D8', borderRadius: '7px', boxSizing: 'border-box', outline: 'none', color: '#2A2A2A' }} />
+            </div>
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#2A2A2A', marginBottom: '4px' }}>Email (optional)</label>
+              <input value={newSupplierEmail} onChange={e => setNewSupplierEmail(e.target.value)} type="email" placeholder="supplier@example.com"
+                style={{ width: '100%', padding: '9px 12px', fontSize: '14px', border: '1.5px solid #E2E0D8', borderRadius: '7px', boxSizing: 'border-box', outline: 'none', color: '#2A2A2A' }} />
+            </div>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#2A2A2A', marginBottom: '4px' }}>VAT Number (optional)</label>
+              <input value={newSupplierVat} onChange={e => setNewSupplierVat(e.target.value)} placeholder="4XXXXXXXXX"
+                style={{ width: '100%', padding: '9px 12px', fontSize: '14px', border: '1.5px solid #E2E0D8', borderRadius: '7px', boxSizing: 'border-box', outline: 'none', color: '#2A2A2A' }} />
+            </div>
+            {createError && <div style={{ backgroundColor: '#FEE2E2', borderRadius: '6px', padding: '8px 12px', marginBottom: '12px', fontSize: '12px', color: '#C0392B' }}>{createError}</div>}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => setShowCreateSupplier(false)} disabled={creatingSupplier}
+                style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1.5px solid #E2E0D8', backgroundColor: '#fff', color: '#8A8878', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={handleCreateSupplier} disabled={creatingSupplier || !newSupplierName}
+                style={{ flex: 2, padding: '10px', borderRadius: '8px', border: 'none', backgroundColor: creatingSupplier || !newSupplierName ? '#94A3B8' : '#13B5EA', color: '#fff', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
+                {creatingSupplier ? 'Creating...' : 'Create in Xero →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   )
 }
