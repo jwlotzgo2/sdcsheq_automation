@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, memo } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
@@ -101,7 +101,7 @@ function SignInForm({ dark }: { dark?: boolean }) {
     setLoading(true); setError('')
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError(error.message); setLoading(false) }
-    else window.location.href = '/dashboard'
+    else window.location.href = '/'
   }
 
   const handleForgot = async () => {

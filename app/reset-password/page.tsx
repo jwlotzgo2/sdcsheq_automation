@@ -85,7 +85,7 @@ export default function ResetPasswordPage() {
             <div style={{ width: '56px', height: '56px', backgroundColor: '#E8F5E9', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: '24px' }}>✓</div>
             <h3 style={{ color: DARK, fontSize: '18px', fontWeight: 'bold', marginBottom: '8px' }}>Password updated</h3>
             <p style={{ color: '#8A8878', fontSize: '14px', marginBottom: '24px' }}>Your password has been changed successfully.</p>
-            <a href="/login" style={{ display: 'inline-block', padding: '12px 28px', backgroundColor: AMBER, color: '#fff', borderRadius: '8px', fontSize: '14px', fontWeight: '700', textDecoration: 'none' }}>
+            <a href="/" style={{ display: 'inline-block', padding: '12px 28px', backgroundColor: AMBER, color: '#fff', borderRadius: '8px', fontSize: '14px', fontWeight: '700', textDecoration: 'none' }}>
               Sign in
             </a>
           </div>
