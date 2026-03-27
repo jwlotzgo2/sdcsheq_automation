@@ -86,7 +86,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     window.location.href = '/login'
   }
 
-  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
+  const isActive = (href: string) => href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/')
 
   const Badge = ({ count }: { count: number }) => count > 0 ? (
     <span style={{

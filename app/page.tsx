@@ -114,25 +114,11 @@ export default function HomePage() {
   }
 
   const cards: Card[] = [
-    // Overdue — always show if any, very urgent
-    {
-      icon: '🚨',
-      title: 'Overdue Invoices',
-      description: `${stats.overdue} invoice${stats.overdue !== 1 ? 's' : ''} past due date — needs immediate attention`,
-      href: '/invoices',
-      count: stats.overdue,
-      value: fmt(stats.overdueValue),
-      color: WHITE,
-      bg: RED,
-      urgent: true,
-      show: stats.overdue > 0,
-    },
-    // Review queue — show to reviewers and admins
     {
       icon: '📋',
       title: 'Review Queue',
       description: stats.pendingReview > 0
-        ? `${stats.pendingReview} invoice${stats.pendingReview !== 1 ? 's' : ''} waiting for your review`
+        ? `${stats.pendingReview} invoice${stats.pendingReview !== 1 ? 's' : ''} waiting for review`
         : 'Review queue is clear — nice work!',
       href: '/review',
       count: stats.pendingReview,
@@ -140,14 +126,13 @@ export default function HomePage() {
       color: DARK,
       bg: '#FEF3C7',
       urgent: stats.pendingReview > 0,
-      show: ['AP_CLERK','ADMIN','REVIEWER'].includes(role) || !role,
+      show: true,
     },
-    // Approval queue — show to approvers and admins
     {
       icon: '✅',
       title: 'Approve Queue',
       description: stats.pendingApproval > 0
-        ? `${stats.pendingApproval} invoice${stats.pendingApproval !== 1 ? 's' : ''} waiting for your approval`
+        ? `${stats.pendingApproval} invoice${stats.pendingApproval !== 1 ? 's' : ''} waiting for approval`
         : 'Nothing pending approval right now',
       href: '/approve',
       count: stats.pendingApproval,
@@ -155,9 +140,17 @@ export default function HomePage() {
       color: DARK,
       bg: '#F0FDF4',
       urgent: stats.pendingApproval > 0,
-      show: ['APPROVER','ADMIN'].includes(role) || !role,
+      show: true,
     },
-    // Ready to push to Xero
+    {
+      icon: '📷',
+      title: 'Capture Receipt',
+      description: 'Photograph and submit an expense receipt for processing',
+      href: '/capture',
+      color: DARK,
+      bg: LIGHT,
+      show: true,
+    },
     {
       icon: '📤',
       title: 'Push to Xero',
@@ -170,29 +163,9 @@ export default function HomePage() {
       color: WHITE,
       bg: TEAL,
       urgent: stats.approvedReady > 0,
-      show: ['ADMIN','APPROVER'].includes(role) || !role,
-    },
-    // Dashboard
-    {
-      icon: '📊',
-      title: 'Dashboard',
-      description: `R ${Number(stats.totalPipeline).toLocaleString('en-ZA', { minimumFractionDigits: 0 })} total in pipeline · ${stats.xeroPosted} posted to Xero`,
-      href: '/dashboard',
-      color: WHITE,
-      bg: DARK,
       show: true,
     },
-    // Capture
-    {
-      icon: '📷',
-      title: 'Capture Receipt',
-      description: 'Photograph and submit an expense receipt for processing',
-      href: '/capture',
-      color: DARK,
-      bg: LIGHT,
-      show: true,
-    },
-  ].filter(c => c.show)
+  ]
 
   const cols = isMobile ? 1 : cards.length <= 4 ? 2 : 3
 
@@ -238,7 +211,7 @@ export default function HomePage() {
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '14px' }}>
-            {cards.filter(c => c.icon !== '🚨').map((card, i) => (
+            {cards.map((card, i) => (
               <div key={i} onClick={() => router.push(card.href)}
                 style={{
                   backgroundColor: card.bg, borderRadius: '12px',
