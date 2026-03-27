@@ -60,6 +60,7 @@ const CaptureForm = memo(function CaptureForm({ glCodes, costCentres, userEmail,
       if (data.amount_excl)  setAmountExcl(String(data.amount_excl))
       if (data.amount_vat)   setAmountVat(String(data.amount_vat))
       if (data.amount_incl)  setAmountIncl(String(data.amount_incl))
+      if (data.suggested_gl_id) setGlCodeId(data.suggested_gl_id)
       setExtracted(true)
     } catch (err) {
       setError('Could not extract receipt data. Please fill in manually.')
@@ -131,7 +132,7 @@ const CaptureForm = memo(function CaptureForm({ glCodes, costCentres, userEmail,
       {/* Extracted badge */}
       {extracted && (
         <div style={{ backgroundColor: '#F0FDF4', border: `1px solid #BBF7D0`, borderRadius: '8px', padding: '8px 12px', marginBottom: '14px', fontSize: '12px', color: OLIVE, fontWeight: '600' }}>
-          ✓ Receipt data extracted — please review and confirm below
+          ✓ Receipt data extracted — vendor, amounts and GL code pre-filled. Please review and confirm.
         </div>
       )}
 
