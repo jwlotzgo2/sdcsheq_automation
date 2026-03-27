@@ -22,15 +22,14 @@ export async function POST(request: NextRequest) {
     .maybeSingle()
 
   if (existing) {
-    // Just update their role
     await supabase.from('user_profiles').update({ role, is_active: true }).eq('email', email)
     return NextResponse.json({ success: true, message: 'User role updated' })
   }
 
-  // Send magic link invite
+  // Invite user — sends an email with a link to set their password
   const { error } = await supabase.auth.admin.inviteUserByEmail(email, {
     data: { invited_role: role },
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'}/dashboard`,
+    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'}/reset-password`,
   })
 
   if (error) {
@@ -38,8 +37,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  // Pre-set role on the profile (created by trigger on signup)
-  // Upsert in case profile already created
+  // Pre-set role on profile
   await supabase.from('user_profiles').upsert({
     email,
     role,

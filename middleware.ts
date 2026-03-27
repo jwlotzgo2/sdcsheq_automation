@@ -29,6 +29,7 @@ export async function middleware(request: NextRequest) {
 
   const isPublicPath =
     request.nextUrl.pathname.startsWith('/login') ||
+    request.nextUrl.pathname.startsWith('/reset-password') ||
     request.nextUrl.pathname.startsWith('/api/inbound') ||
     request.nextUrl.pathname.startsWith('/api/xero/callback') ||
     request.nextUrl.pathname.startsWith('/api/cron') ||

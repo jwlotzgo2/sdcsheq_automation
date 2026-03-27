@@ -16,7 +16,6 @@ const STEPS = [
   { icon: '💰', label: 'Payment Tracked',    color: '#166534' },
 ]
 
-// Isolated so animation never causes parent re-render
 const DesktopSteps = memo(() => {
   const [activeStep, setActiveStep] = useState(0)
   useEffect(() => {
@@ -32,19 +31,10 @@ const DesktopSteps = memo(() => {
         return (
           <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '130px' }}>
-              <div style={{
-                width: '60px', height: '60px', borderRadius: '50%',
-                backgroundColor: isActive ? step.color : isPast ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)',
-                border: isActive ? `3px solid ${step.color}` : isPast ? '2px solid rgba(255,255,255,0.25)' : '2px solid rgba(255,255,255,0.08)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: isActive ? '26px' : '22px', transition: 'all 0.5s ease',
-                boxShadow: isActive ? `0 0 28px ${step.color}88` : 'none', marginBottom: '14px',
-              }}>
+              <div style={{ width: '60px', height: '60px', borderRadius: '50%', backgroundColor: isActive ? step.color : isPast ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)', border: isActive ? `3px solid ${step.color}` : isPast ? '2px solid rgba(255,255,255,0.25)' : '2px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: isActive ? '26px' : '22px', transition: 'all 0.5s ease', boxShadow: isActive ? `0 0 28px ${step.color}88` : 'none', marginBottom: '14px' }}>
                 {isPast ? <span style={{ fontSize: '22px', color: 'rgba(255,255,255,0.6)' }}>✓</span> : step.icon}
               </div>
-              <div style={{ fontSize: '13px', fontWeight: isActive ? '700' : '500', color: isActive ? '#fff' : isFuture ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.5)', textAlign: 'center', lineHeight: 1.3, transition: 'all 0.5s ease' }}>
-                {step.label}
-              </div>
+              <div style={{ fontSize: '13px', fontWeight: isActive ? '700' : '500', color: isActive ? '#fff' : isFuture ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.5)', textAlign: 'center', lineHeight: 1.3, transition: 'all 0.5s ease' }}>{step.label}</div>
             </div>
             {i < STEPS.length - 1 && (
               <div style={{ display: 'flex', alignItems: 'center', width: '48px', marginBottom: '28px', flexShrink: 0 }}>
@@ -73,10 +63,12 @@ function useIsMobile() {
 
 export default function LoginPage() {
   const [email, setEmail]       = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading]   = useState(false)
-  const [sent, setSent]         = useState(false)
   const [error, setError]       = useState('')
   const [mounted, setMounted]   = useState(false)
+  const [showForgot, setShowForgot] = useState(false)
+  const [resetSent, setResetSent]   = useState(false)
   const isMobile = useIsMobile()
 
   const supabase = createBrowserClient(
@@ -87,23 +79,103 @@ export default function LoginPage() {
   useEffect(() => { setMounted(true) }, [])
 
   const handleLogin = async () => {
-    if (!email) return
+    if (!email || !password) return
     setLoading(true); setError('')
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${window.location.origin}/api/auth/callback` },
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) { setError(error.message); setLoading(false) }
+    else window.location.href = '/dashboard'
+  }
+
+  const handleForgotPassword = async () => {
+    if (!email) { setError('Please enter your email address first.'); return }
+    setLoading(true); setError('')
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
     })
     if (error) { setError(error.message); setLoading(false) }
-    else { setSent(true); setLoading(false) }
+    else { setResetSent(true); setLoading(false) }
   }
 
   if (!mounted) return <div style={{ minHeight: '100vh', backgroundColor: DARK }} />
 
-  // ── MOBILE — dead simple, no animation ────────────────────────
+  const FormContent = () => (
+    <>
+      {!showForgot ? (
+        <>
+          <div style={{ marginBottom: '20px' }}>
+            <h2 style={{ color: isMobile ? '#fff' : DARK, fontSize: '20px', fontWeight: 'bold', margin: '0 0 6px' }}>Sign in</h2>
+            <p style={{ color: isMobile ? 'rgba(255,255,255,0.45)' : '#8A8878', fontSize: '14px', margin: 0 }}>Enter your credentials to access GoAutomate</p>
+          </div>
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: isMobile ? 'rgba(255,255,255,0.7)' : DARK, marginBottom: '6px' }}>Email address</label>
+            <input
+              type="email" value={email}
+              onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleLogin()}
+              placeholder="you@sdcsheq.co.za"
+              autoComplete="email"
+              style={{ width: '100%', padding: '12px 14px', fontSize: '16px', border: isMobile ? '1.5px solid rgba(255,255,255,0.15)' : '1.5px solid #D8D5CC', borderRadius: '8px', outline: 'none', boxSizing: 'border-box', color: isMobile ? '#fff' : DARK, backgroundColor: isMobile ? 'rgba(255,255,255,0.08)' : '#fff' }}
+            />
+          </div>
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: isMobile ? 'rgba(255,255,255,0.7)' : DARK, marginBottom: '6px' }}>Password</label>
+            <input
+              type="password" value={password}
+              onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleLogin()}
+              placeholder="••••••••"
+              autoComplete="current-password"
+              style={{ width: '100%', padding: '12px 14px', fontSize: '16px', border: isMobile ? '1.5px solid rgba(255,255,255,0.15)' : '1.5px solid #D8D5CC', borderRadius: '8px', outline: 'none', boxSizing: 'border-box', color: isMobile ? '#fff' : DARK, backgroundColor: isMobile ? 'rgba(255,255,255,0.08)' : '#fff' }}
+            />
+          </div>
+          <div style={{ textAlign: 'right', marginBottom: '16px' }}>
+            <button onClick={() => { setShowForgot(true); setError('') }} style={{ background: 'none', border: 'none', color: AMBER, fontSize: '13px', cursor: 'pointer', fontWeight: '500' }}>
+              Forgot password?
+            </button>
+          </div>
+          {error && <div style={{ backgroundColor: '#FEE2E2', borderRadius: '8px', padding: '10px 12px', marginBottom: '14px', fontSize: '13px', color: '#C0392B' }}>{error}</div>}
+          <button onClick={handleLogin} disabled={loading || !email || !password} style={{ width: '100%', padding: '13px', backgroundColor: loading || !email || !password ? (isMobile ? '#5A4A2A' : '#C8B89A') : AMBER, color: '#fff', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: '700', cursor: 'pointer' }}>
+            {loading ? 'Signing in...' : 'Sign in'}
+          </button>
+        </>
+      ) : (
+        <>
+          {!resetSent ? (
+            <>
+              <div style={{ marginBottom: '20px' }}>
+                <button onClick={() => { setShowForgot(false); setError('') }} style={{ background: 'none', border: 'none', color: AMBER, fontSize: '13px', cursor: 'pointer', fontWeight: '600', padding: '0 0 12px', display: 'block' }}>← Back to sign in</button>
+                <h2 style={{ color: isMobile ? '#fff' : DARK, fontSize: '20px', fontWeight: 'bold', margin: '0 0 6px' }}>Reset password</h2>
+                <p style={{ color: isMobile ? 'rgba(255,255,255,0.45)' : '#8A8878', fontSize: '14px', margin: 0 }}>Enter your email and we'll send you a reset link</p>
+              </div>
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: isMobile ? 'rgba(255,255,255,0.7)' : DARK, marginBottom: '6px' }}>Email address</label>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleForgotPassword()} placeholder="you@sdcsheq.co.za" autoComplete="email"
+                  style={{ width: '100%', padding: '12px 14px', fontSize: '16px', border: isMobile ? '1.5px solid rgba(255,255,255,0.15)' : '1.5px solid #D8D5CC', borderRadius: '8px', outline: 'none', boxSizing: 'border-box', color: isMobile ? '#fff' : DARK, backgroundColor: isMobile ? 'rgba(255,255,255,0.08)' : '#fff' }} />
+              </div>
+              {error && <div style={{ backgroundColor: '#FEE2E2', borderRadius: '8px', padding: '10px 12px', marginBottom: '14px', fontSize: '13px', color: '#C0392B' }}>{error}</div>}
+              <button onClick={handleForgotPassword} disabled={loading || !email} style={{ width: '100%', padding: '13px', backgroundColor: loading || !email ? (isMobile ? '#5A4A2A' : '#C8B89A') : AMBER, color: '#fff', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: '700', cursor: 'pointer' }}>
+                {loading ? 'Sending...' : 'Send reset link'}
+              </button>
+            </>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '8px 0' }}>
+              <div style={{ width: '56px', height: '56px', backgroundColor: isMobile ? 'rgba(255,255,255,0.1)' : '#E8F5E9', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: '24px' }}>✓</div>
+              <h3 style={{ color: isMobile ? '#fff' : DARK, fontSize: '18px', fontWeight: 'bold', marginBottom: '8px' }}>Check your email</h3>
+              <p style={{ color: isMobile ? 'rgba(255,255,255,0.5)' : '#8A8878', fontSize: '14px', marginBottom: '24px' }}>
+                We sent a password reset link to <strong style={{ color: isMobile ? '#fff' : DARK }}>{email}</strong>
+              </p>
+              <button onClick={() => { setShowForgot(false); setResetSent(false) }} style={{ background: 'none', border: 'none', color: AMBER, fontSize: '14px', cursor: 'pointer', fontWeight: '600' }}>Back to sign in</button>
+            </div>
+          )}
+        </>
+      )}
+    </>
+  )
+
+  // ── MOBILE ────────────────────────────────────────────────────
   if (isMobile) {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: DARK, fontFamily: 'Arial, sans-serif', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '40px 24px', boxSizing: 'border-box' }}>
-        {/* Brand */}
         <div style={{ marginBottom: '40px' }}>
           <div style={{ display: 'inline-block', backgroundColor: AMBER, borderRadius: '4px', padding: '4px 12px', marginBottom: '14px' }}>
             <span style={{ color: '#fff', fontWeight: 'bold', fontSize: '13px', letterSpacing: '0.08em' }}>GoAutomate</span>
@@ -111,50 +183,8 @@ export default function LoginPage() {
           <h1 style={{ color: '#fff', fontSize: '26px', fontWeight: 'bold', margin: '0 0 8px', lineHeight: 1.2 }}>AP Automation<br />for SDC SHEQ</h1>
           <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '14px', margin: 0 }}>From invoice to Xero — automated, audited, compliant.</p>
         </div>
-
-        {/* Sign in form — no wrapper that re-renders */}
-        {!sent ? (
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: 'rgba(255,255,255,0.7)', marginBottom: '8px' }}>Email address</label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleLogin()}
-              placeholder="you@sdcsheq.co.za"
-              autoComplete="email"
-              style={{ width: '100%', padding: '14px', fontSize: '16px', borderRadius: '10px', border: '1.5px solid rgba(255,255,255,0.15)', backgroundColor: 'rgba(255,255,255,0.08)', color: '#fff', outline: 'none', boxSizing: 'border-box', marginBottom: '12px' }}
-            />
-            {error && (
-              <div style={{ backgroundColor: '#FEE2E2', borderRadius: '8px', padding: '10px 12px', marginBottom: '12px', fontSize: '13px', color: '#C0392B' }}>{error}</div>
-            )}
-            <button
-              onClick={handleLogin}
-              disabled={loading || !email}
-              style={{ width: '100%', padding: '15px', backgroundColor: loading || !email ? '#8A6A2A' : AMBER, color: '#fff', border: 'none', borderRadius: '10px', fontSize: '16px', fontWeight: '700', cursor: loading || !email ? 'not-allowed' : 'pointer' }}
-            >
-              {loading ? 'Sending...' : 'Send magic link'}
-            </button>
-            <p style={{ textAlign: 'center', fontSize: '12px', color: 'rgba(255,255,255,0.3)', marginTop: '14px' }}>
-              No password required. We&apos;ll email you a secure link.
-            </p>
-          </div>
-        ) : (
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ width: '64px', height: '64px', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: '28px' }}>✓</div>
-            <h3 style={{ color: '#fff', fontSize: '20px', fontWeight: 'bold', marginBottom: '8px' }}>Check your email</h3>
-            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '14px', marginBottom: '24px' }}>
-              Sent to <strong style={{ color: '#fff' }}>{email}</strong>
-            </p>
-            <button onClick={() => { setSent(false); setEmail('') }} style={{ background: 'none', border: 'none', color: AMBER, fontSize: '14px', cursor: 'pointer', fontWeight: '600' }}>
-              Use a different email
-            </button>
-          </div>
-        )}
-
-        <p style={{ textAlign: 'center', fontSize: '11px', color: 'rgba(255,255,255,0.18)', marginTop: '48px' }}>
-          Powered by Go 2 Analytics · Microsoft Analytics Partner
-        </p>
+        <FormContent />
+        <p style={{ textAlign: 'center', fontSize: '11px', color: 'rgba(255,255,255,0.18)', marginTop: '40px' }}>Powered by Go 2 Analytics · Microsoft Analytics Partner</p>
       </div>
     )
   }
@@ -172,35 +202,9 @@ export default function LoginPage() {
         </div>
         <DesktopSteps />
       </div>
-
       <div style={{ display: 'flex', justifyContent: 'center', padding: '0 64px 48px' }}>
         <div style={{ backgroundColor: '#F5F5F2', borderRadius: '16px', padding: '36px 40px', width: '100%', maxWidth: '480px', boxShadow: '0 24px 80px rgba(0,0,0,0.4)' }}>
-          {!sent ? (
-            <>
-              <h2 style={{ color: DARK, fontSize: '20px', fontWeight: 'bold', margin: '0 0 6px' }}>Sign in</h2>
-              <p style={{ color: '#8A8878', fontSize: '14px', margin: '0 0 20px' }}>Enter your email to receive a secure sign-in link</p>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: DARK, marginBottom: '6px' }}>Email address</label>
-              <input
-                type="email" value={email}
-                onChange={e => setEmail(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                placeholder="you@sdcsheq.co.za"
-                style={{ width: '100%', padding: '12px 14px', fontSize: '14px', border: '1.5px solid #D8D5CC', borderRadius: '8px', outline: 'none', boxSizing: 'border-box', color: DARK, backgroundColor: '#fff', marginBottom: '12px' }}
-              />
-              {error && <div style={{ backgroundColor: '#FEE2E2', borderRadius: '6px', padding: '10px 12px', marginBottom: '12px', fontSize: '13px', color: '#C0392B' }}>{error}</div>}
-              <button onClick={handleLogin} disabled={loading || !email} style={{ width: '100%', padding: '13px', backgroundColor: loading || !email ? '#C8B89A' : AMBER, color: '#fff', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: '700', cursor: 'pointer' }}>
-                {loading ? 'Sending...' : 'Send magic link'}
-              </button>
-              <p style={{ textAlign: 'center', fontSize: '12px', color: '#8A8878', marginTop: '14px', marginBottom: 0 }}>No password required. We&apos;ll email you a secure link.</p>
-            </>
-          ) : (
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ width: '56px', height: '56px', backgroundColor: '#E8F5E9', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: '24px' }}>✓</div>
-              <h3 style={{ color: DARK, fontSize: '18px', fontWeight: 'bold', marginBottom: '8px' }}>Check your email</h3>
-              <p style={{ color: '#8A8878', fontSize: '14px', marginBottom: '24px' }}>Sent to <strong>{email}</strong></p>
-              <button onClick={() => { setSent(false); setEmail('') }} style={{ background: 'none', border: 'none', color: AMBER, fontSize: '14px', cursor: 'pointer', fontWeight: '600' }}>Use a different email</button>
-            </div>
-          )}
+          <FormContent />
         </div>
       </div>
       <div style={{ textAlign: 'center', paddingBottom: '24px', fontSize: '11px', color: 'rgba(255,255,255,0.18)' }}>Powered by Go 2 Analytics · Microsoft Analytics Partner</div>
