@@ -225,15 +225,13 @@ export async function extractInvoice(invoiceId: string): Promise<void> {
   if (rawJson.line_items && rawJson.line_items.length > 0) {
     const lineItems = await Promise.all(
       rawJson.line_items.map(async (item: any, index: number) => {
-        let glCodeId: string | null = null
-        if (item.suggested_gl_code) {
-          const { data: gl } = await supabase
-            .from('gl_codes')
-            .select('id')
-            .eq('xero_account_code', item.suggested_gl_code)
-            .maybeSingle()
-          if (gl) glCodeId = gl.id
-        }
+        // Smart GL matching — corrections first, then supplier default, then Claude suggestion
+        const { matchGlCode } = await import('@/lib/suppliers/gl-match')
+        const glCodeId = await matchGlCode(
+          item.suggested_gl_code,
+          item.description,
+          invoiceUpdate.supplier_id ?? null
+        )
         return {
           invoice_id: invoiceId,
           description: item.description,

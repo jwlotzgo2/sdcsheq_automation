@@ -102,17 +102,44 @@ export default function ReviewPage() {
   const handleSubmit = async () => {
     if (!selected) return
     setSubmitting(true)
+    const user = (await supabase.auth.getUser()).data.user
+
+    // Log supplier correction if changed
+    if (selectedSupplier && selectedSupplier !== selected.supplier_id) {
+      await supabase.from('supplier_corrections').insert({
+        invoice_id:    selected.id,
+        extracted_name: selected.supplier_name,
+        corrected_to:  selectedSupplier,
+        corrected_by:  user?.email,
+      })
+    }
+
     await supabase.from('invoices').update({
       status: 'PENDING_APPROVAL',
       supplier_id: selectedSupplier || null,
       notes: notes || selected.notes,
     }).eq('id', selected.id)
+
+    // Save line items and log GL corrections
     for (const line of lines) {
-      await supabase.from('invoice_line_items').update({ gl_code_id: line.gl_code_id ?? line.gl_codes?.id }).eq('id', line.id)
+      const newGlId = line.gl_code_id ?? line.gl_codes?.id
+      const origGlId = line.gl_codes?.id
+      if (newGlId && newGlId !== origGlId) {
+        await supabase.from('gl_corrections').insert({
+          invoice_id:       selected.id,
+          supplier_id:      selectedSupplier || selected.supplier_id || null,
+          line_description: line.description,
+          extracted_gl_id:  origGlId || null,
+          corrected_gl_id:  newGlId,
+          corrected_by:     user?.email,
+        })
+      }
+      await supabase.from('invoice_line_items').update({ gl_code_id: newGlId }).eq('id', line.id)
     }
+
     await supabase.from('audit_trail').insert({
       invoice_id: selected.id, from_status: selected.status, to_status: 'PENDING_APPROVAL',
-      actor_email: (await supabase.auth.getUser()).data.user?.email,
+      actor_email: user?.email,
       notes: notes || 'Submitted for approval',
     })
     const remaining = invoices.filter(i => i.id !== selected.id)

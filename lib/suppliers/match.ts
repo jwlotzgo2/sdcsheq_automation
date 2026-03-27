@@ -43,7 +43,7 @@ function namesMatch(a: string, b: string): boolean {
 export async function matchSupplier(
   supplierName: string,
   vatNumber?: string | null
-): Promise<{ id: string; name: string; matchedBy: 'vat' | 'name' } | null> {
+): Promise<{ id: string; name: string; matchedBy: 'vat' | 'name' | 'correction' } | null> {
   const supabase = getSupabase()
 
   const { data: suppliers } = await supabase
@@ -52,6 +52,21 @@ export async function matchSupplier(
     .eq('is_active', true)
 
   if (!suppliers || suppliers.length === 0) return null
+
+  // 0. Check prior corrections first
+  const { data: correction } = await supabase
+    .from('supplier_corrections')
+    .select('corrected_to, suppliers!corrected_to(id, name)')
+    .eq('extracted_name', supplierName)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (correction?.suppliers) {
+    const s = correction.suppliers as any
+    console.log(`[supplier-match] Correction match: ${supplierName} → ${s.name}`)
+    return { id: s.id, name: s.name, matchedBy: 'correction' as any }
+  }
 
   // 1. Try VAT match first
   if (vatNumber) {
