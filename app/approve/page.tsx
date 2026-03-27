@@ -159,18 +159,22 @@ export default function ApprovePage() {
 
       {/* Line items */}
       <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, overflow: 'hidden', flexShrink: 0 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 36px 76px 76px 160px', padding: '5px 10px', backgroundColor: LIGHT, borderBottom: `1px solid ${BORDER}` }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 36px 76px 76px 170px', padding: '5px 10px', backgroundColor: LIGHT, borderBottom: `1px solid ${BORDER}` }}>
           {['Description', 'Qty', 'Unit', 'Total', 'GL Code'].map(h => (
             <div key={h} style={{ fontSize: '9px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
           ))}
         </div>
         {lines.map((line, i) => (
-          <div key={line.id} style={{ display: 'grid', gridTemplateColumns: '2fr 36px 76px 76px 160px', padding: '5px 10px', borderBottom: i < lines.length - 1 ? `1px solid ${LIGHT}` : 'none', alignItems: 'center' }}>
+          <div key={line.id} style={{ display: 'grid', gridTemplateColumns: '2fr 36px 76px 76px 170px', padding: '5px 10px', borderBottom: i < lines.length - 1 ? `1px solid ${LIGHT}` : 'none', alignItems: 'center' }}>
             <div style={{ fontSize: '10px', color: DARK, paddingRight: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={line.description}>{line.description}</div>
             <div style={{ fontSize: '10px', color: DARK }}>{line.quantity}</div>
             <div style={{ fontSize: '10px', color: DARK }}>{fmt(line.unit_price)}</div>
             <div style={{ fontSize: '10px', fontWeight: '500', color: DARK }}>{fmt(line.line_total)}</div>
-            <div style={{ fontSize: '10px', color: line.gl_codes?.name ? OLIVE : MUTED }}>{line.gl_codes ? `${line.gl_codes.xero_account_code} · ${line.gl_codes.name}` : '— No GL —'}</div>
+            <select value={line.gl_code_id ?? line.gl_codes?.id ?? ''} onChange={e => updateLine(i, 'gl_code_id', e.target.value)}
+              style={{ padding: '3px 5px', fontSize: '10px', border: `1px solid ${BORDER}`, borderRadius: '4px', backgroundColor: WHITE, color: DARK, width: '100%' }}>
+              <option value="">— GL —</option>
+              {glCodes.map(g => <option key={g.id} value={g.id}>{g.xero_account_code} · {g.name}</option>)}
+            </select>
           </div>
         ))}
         <div style={{ padding: '4px 10px', borderTop: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'flex-end', gap: '14px', backgroundColor: LIGHT }}>
