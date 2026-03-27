@@ -14,112 +14,123 @@ export interface TourStep {
   page: string
   title: string
   body: string
-  targetSelector?: string   // CSS selector to highlight
+  targetSelector?: string
   position?: 'top' | 'bottom' | 'left' | 'right' | 'center'
-  beforeStep?: () => void
 }
 
 const TOUR_STEPS: TourStep[] = [
   {
     id: 'welcome',
-    page: '/dashboard',
+    page: '/',
     title: 'Welcome to GoAutomate 👋',
-    body: 'This quick tour will walk you through the full AP automation workflow — from receiving an invoice by email all the way through to posting it in Xero. It takes about 2 minutes.',
+    body: 'This quick tour walks you through the full AP automation workflow — from receiving an invoice by email all the way through to posting it in Xero. It takes about 2 minutes.',
     position: 'center',
   },
   {
-    id: 'dashboard-overview',
-    page: '/dashboard',
-    title: 'Your Dashboard',
-    body: 'The dashboard gives you a real-time view of the AP pipeline. KPI cards show how many invoices are waiting for action, the pipeline flow shows where everything is, and the aging grid flags anything that\'s been sitting too long.',
+    id: 'home-overview',
+    page: '/',
+    title: 'Your Home Screen',
+    body: 'The home screen is your action centre. It shows everything that needs your attention right now — overdue invoices, queues waiting for action, and quick links to capture expenses or view the dashboard. The counts update in real time.',
     targetSelector: 'h1',
     position: 'bottom',
   },
   {
+    id: 'overdue-banner',
+    page: '/',
+    title: 'Overdue Alerts',
+    body: 'If any invoices are past their due date, a red banner appears at the top. This is urgent — tap it to go straight to the invoices list and take action.',
+    position: 'center',
+  },
+  {
     id: 'email-ingestion',
-    page: '/dashboard',
+    page: '/',
     title: 'Step 1 — Invoice Arrives by Email',
-    body: 'Suppliers send invoices to your dedicated Postmark email address. GoAutomate receives them automatically, extracts the PDF, and stores it. No manual downloading required.',
+    body: 'Suppliers email invoices to your dedicated Postmark address. GoAutomate receives them automatically, extracts the PDF, and queues them for processing. No manual downloading or forwarding needed.',
     position: 'center',
   },
   {
     id: 'ai-extraction',
-    page: '/dashboard',
+    page: '/',
     title: 'Step 2 — AI Extraction',
-    body: 'Claude AI reads each PDF and extracts the supplier name, invoice number, dates, line items, amounts, and VAT. It also suggests the correct GL code based on the supplier. This happens in seconds.',
+    body: 'Claude AI reads each PDF and extracts the supplier name, invoice number, dates, line items, amounts, and VAT. It also suggests the correct GL code from your live Xero chart of accounts. This happens in seconds.',
     position: 'center',
   },
   {
-    id: 'review-queue-nav',
-    page: '/dashboard',
+    id: 'review-queue-intro',
+    page: '/',
     title: 'Step 3 — Review Queue',
-    body: 'Extracted invoices land in the Review Queue. A reviewer checks the data, corrects any GL codes if needed, matches the supplier, and submits for approval. Let\'s go there now.',
-    targetSelector: 'a[href="/review"]',
-    position: 'right',
+    body: 'Extracted invoices land in the Review Queue. A reviewer checks the extracted data, confirms the GL codes, matches the supplier, and submits for approval. Any corrections you make are remembered for future invoices from the same supplier.',
+    targetSelector: 'h1',
+    position: 'center',
   },
   {
     id: 'review-list',
     page: '/review',
     title: 'Review Queue — Invoice List',
-    body: 'All invoices pending review appear here. Each row shows the supplier, invoice number, date, and amount. Tap or click any invoice to open the detail view.',
+    body: 'All invoices pending review are listed here. Invoices tagged EXPENSE are expense receipts submitted by staff. Tap or click any invoice to open the detail view.',
     position: 'center',
   },
   {
     id: 'review-detail',
     page: '/review',
     title: 'Reviewing an Invoice',
-    body: 'The detail view shows everything Claude extracted — supplier, dates, line items, and suggested GL codes. You can correct the supplier match and adjust GL codes before submitting. The original PDF is always visible on the right (or as a full-screen modal on mobile).',
+    body: 'The detail view shows everything Claude extracted — supplier, dates, line items, and GL codes. You can correct the supplier, adjust GL codes, and add a note for the approver. The original PDF is always visible on the right.',
     position: 'center',
   },
   {
     id: 'review-submit',
     page: '/review',
-    title: 'Submit for Approval',
-    body: 'Once you\'re happy with the data, click "Submit for Approval". The invoice moves to the Approval Queue and the approver gets notified. You can also Reject an invoice with a reason — it will be flagged and removed from the pipeline.',
+    title: 'Submit or Reject',
+    body: 'Once you\'re happy with the data, click "Submit for Approval". The invoice moves to the Approval Queue. You can also Reject an invoice — it\'s flagged and removed from the pipeline. If an approver returns something, the return reason appears in amber at the top.',
     position: 'center',
   },
   {
-    id: 'approve-queue-nav',
-    page: '/review',
-    title: 'Step 4 — Approval Queue',
-    body: 'The approver has their own queue. They can see the reviewer\'s notes, check the PDF, and either Approve, Return to the reviewer, or Reject. Let\'s go there now.',
-    targetSelector: 'a[href="/approve"]',
-    position: 'right',
-  },
-  {
-    id: 'approve-action',
+    id: 'approve-intro',
     page: '/approve',
-    title: 'Approving an Invoice',
-    body: 'The approver sees the full invoice detail including any notes left by the reviewer. One tap to Approve — or Return if something needs to be corrected. Approval is the final human step in the process.',
+    title: 'Step 4 — Approve Queue',
+    body: 'The approver sees all invoices submitted for approval. They can check the reviewer\'s notes, view the PDF, then Approve, Return to the reviewer with a note, or Reject. Approvers can also override GL codes if needed.',
     position: 'center',
   },
   {
-    id: 'xero-push',
-    page: '/invoices',
+    id: 'xero-push-intro',
+    page: '/xero-push',
     title: 'Step 5 — Push to Xero',
-    body: 'Approved invoices appear on the Invoices page with a "Push to Xero" button. You can review the full batch, see the total value, and submit them all to Xero as draft bills in one click.',
-    targetSelector: 'button',
-    position: 'bottom',
-  },
-  {
-    id: 'xero-result',
-    page: '/invoices',
-    title: 'Posted in Xero',
-    body: 'Once pushed, invoices are marked "Xero Posted" and a bill is created in your Xero account. GoAutomate periodically checks Xero and updates the status to "Paid" once payment is recorded.',
+    body: 'Approved invoices appear here. Select which ones to push, check the total batch value, then submit. Each invoice is posted to Xero as a draft bill. Progress is shown live — you\'ll see a tick or error for each one.',
     position: 'center',
   },
   {
-    id: 'duplicates',
+    id: 'xero-sync',
+    page: '/xero-push',
+    title: 'Xero Sync',
+    body: 'GoAutomate syncs with Xero daily at 6am — pulling updated GL codes, suppliers, and checking payment status. Once a bill is marked paid in Xero, the invoice here updates to "Paid" automatically.',
+    position: 'center',
+  },
+  {
+    id: 'expenses-intro',
+    page: '/expenses',
+    title: 'Expense Capture',
+    body: 'Staff with expense capture permission can photograph receipts on their phone. The AI extracts the vendor, amount, and date. They assign a GL code and cost centre, then submit — it flows through the same review and approval process.',
+    position: 'center',
+  },
+  {
+    id: 'duplicates-intro',
     page: '/duplicates',
     title: 'Duplicate Detection',
-    body: 'GoAutomate automatically detects when a supplier sends the same invoice more than once. Duplicates are blocked and logged here so you can track which suppliers are resubmitting and follow up with them.',
+    body: 'GoAutomate automatically blocks duplicate invoices using a PDF fingerprint. If a supplier sends the same invoice twice, the second one is logged here instead of entering the pipeline.',
+    position: 'center',
+  },
+  {
+    id: 'chat-intro',
+    page: '/',
+    title: 'Team Chat 💬',
+    body: 'The chat button at the bottom right opens the team chat. You can start a conversation on any specific invoice — useful when a reviewer needs to flag something for the approver without rejecting or returning the invoice.',
     position: 'center',
   },
   {
     id: 'done',
-    page: '/dashboard',
+    page: '/',
     title: 'You\'re all set! 🎉',
-    body: 'That\'s the full workflow. If you ever get stuck, come back to the Help page or click the ? in the top bar. You can also replay this tour any time.\n\nGot a question or issue? Email the Go 2 Analytics team directly from the Help page.',
+    body: 'That\'s the full GoAutomate workflow. Come back to the Help page or tap the ? button any time to replay this tour or find answers.\n\nGot a question? Email the Go 2 Analytics team from the Help page.',
     position: 'center',
   },
 ]
@@ -131,7 +142,7 @@ export function useTour() {
   const startTour = () => {
     localStorage.setItem(ACTIVE_KEY, '1')
     localStorage.setItem(STORAGE_KEY, '0')
-    window.location.href = '/dashboard'
+    window.location.href = '/'
   }
   const stopTour = () => {
     localStorage.removeItem(ACTIVE_KEY)
@@ -161,14 +172,10 @@ export default function TourOverlay() {
     if (step === null) return
     const current = TOUR_STEPS[step]
     if (!current) return
-
-    // Navigate to the right page if needed
     if (pathname !== current.page) {
       router.push(current.page)
       return
     }
-
-    // Highlight target element
     if (current.targetSelector) {
       setTimeout(() => {
         const el = document.querySelector(current.targetSelector!)
@@ -187,7 +194,7 @@ export default function TourOverlay() {
       localStorage.removeItem(ACTIVE_KEY)
       localStorage.removeItem(STORAGE_KEY)
       setStep(null)
-      router.push('/dashboard')
+      router.push('/')
       return
     }
     localStorage.setItem(STORAGE_KEY, String(next))
@@ -199,7 +206,7 @@ export default function TourOverlay() {
     const prev = step - 1
     localStorage.setItem(STORAGE_KEY, String(prev))
     setStep(prev)
-  }, [step, router])
+  }, [step])
 
   const skipTour = () => {
     localStorage.removeItem(ACTIVE_KEY)
@@ -214,7 +221,6 @@ export default function TourOverlay() {
 
   const isCenter = current.position === 'center' || !current.targetSelector
 
-  // Calculate tooltip position
   let tooltipStyle: React.CSSProperties = {
     position: 'fixed', zIndex: 1001,
     backgroundColor: WHITE, borderRadius: '14px',
@@ -227,38 +233,25 @@ export default function TourOverlay() {
     tooltipStyle = { ...tooltipStyle, top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
   } else if (highlight) {
     const margin = 12
-    if (current.position === 'bottom') {
-      tooltipStyle = { ...tooltipStyle, top: highlight.bottom + margin, left: Math.max(12, highlight.left) }
-    } else if (current.position === 'right') {
+    if (current.position === 'bottom')
+      tooltipStyle = { ...tooltipStyle, top: highlight.bottom + margin, left: Math.max(12, Math.min(highlight.left, window.innerWidth - 340)) }
+    else if (current.position === 'right')
       tooltipStyle = { ...tooltipStyle, top: highlight.top, left: highlight.right + margin }
-    } else if (current.position === 'top') {
+    else if (current.position === 'top')
       tooltipStyle = { ...tooltipStyle, bottom: window.innerHeight - highlight.top + margin, left: Math.max(12, highlight.left) }
-    } else {
+    else
       tooltipStyle = { ...tooltipStyle, top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
-    }
   } else {
     tooltipStyle = { ...tooltipStyle, top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
   }
 
   return (
     <>
-      {/* Backdrop */}
       <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)', zIndex: 1000 }} />
-
-      {/* Highlight ring around target */}
       {highlight && !isCenter && (
-        <div style={{
-          position: 'fixed', zIndex: 1001, pointerEvents: 'none',
-          top: highlight.top - 4, left: highlight.left - 4,
-          width: highlight.width + 8, height: highlight.height + 8,
-          borderRadius: '8px', border: `3px solid ${AMBER}`,
-          boxShadow: `0 0 0 4px rgba(232,150,12,0.25)`,
-        }} />
+        <div style={{ position: 'fixed', zIndex: 1001, pointerEvents: 'none', top: highlight.top - 4, left: highlight.left - 4, width: highlight.width + 8, height: highlight.height + 8, borderRadius: '8px', border: `3px solid ${AMBER}`, boxShadow: `0 0 0 4px rgba(232,150,12,0.25)` }} />
       )}
-
-      {/* Tooltip */}
       <div style={tooltipStyle}>
-        {/* Progress */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
           <div style={{ display: 'flex', gap: '4px' }}>
             {TOUR_STEPS.map((_, i) => (
@@ -269,16 +262,12 @@ export default function TourOverlay() {
             Skip tour
           </button>
         </div>
-
-        {/* Content */}
         <h3 style={{ fontSize: '16px', fontWeight: '700', color: DARK, margin: '0 0 10px', lineHeight: 1.3 }}>
           {current.title}
         </h3>
         <p style={{ fontSize: '13px', color: '#555', lineHeight: 1.6, margin: '0 0 20px', whiteSpace: 'pre-line' }}>
           {current.body}
         </p>
-
-        {/* Step counter + actions */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: '11px', color: MUTED }}>{step + 1} of {TOUR_STEPS.length}</span>
           <div style={{ display: 'flex', gap: '8px' }}>
