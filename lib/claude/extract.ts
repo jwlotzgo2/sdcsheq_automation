@@ -79,11 +79,6 @@ Choose the most appropriate expense GL code based on the line item description. 
 const EXTRACTION_PROMPT_FALLBACK = `You are an accounts payable assistant. Extract structured data from this invoice PDF.
 Return ONLY a valid JSON object — no markdown, no explanation.
 Use suggested_gl_code null if you cannot determine the GL code.`
-- 800: Cost of Goods Sold
-- 810: Labour
-
-Only assign a GL code if you are confident. Leave as null if uncertain.
-Return amounts as numbers without currency symbols or commas.`
 
 export async function extractInvoice(invoiceId: string): Promise<void> {
   const supabase = getSupabase()
