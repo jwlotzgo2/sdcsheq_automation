@@ -208,15 +208,15 @@ export async function extractInvoice(invoiceId: string): Promise<void> {
     currency: rawJson.currency ?? 'ZAR',
   }
 
-  // Match supplier by name if possible
+  // Match supplier — VAT first, then fuzzy name match
   if (rawJson.supplier_name) {
     invoiceUpdate.supplier_name = rawJson.supplier_name
-    const { data: supplier } = await supabase
-      .from('suppliers')
-      .select('id')
-      .ilike('name', `%${rawJson.supplier_name}%`)
-      .maybeSingle()
-    if (supplier) invoiceUpdate.supplier_id = supplier.id
+    const { matchSupplier } = await import('@/lib/suppliers/match')
+    const match = await matchSupplier(rawJson.supplier_name, rawJson.supplier_vat_number)
+    if (match) {
+      invoiceUpdate.supplier_id   = match.id
+      invoiceUpdate.supplier_name = match.name
+    }
   }
 
   await supabase.from('invoices').update(invoiceUpdate).eq('id', invoiceId)
