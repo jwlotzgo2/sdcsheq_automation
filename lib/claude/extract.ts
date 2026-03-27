@@ -35,6 +35,12 @@ async function buildExtractionPrompt(supabase: any): Promise<string> {
 
   return `You are an accounts payable assistant for SDC SHEQ Compliance, a South African health and safety consulting company. Extract structured data from this invoice PDF.
 
+CRITICAL — SUPPLIER vs CUSTOMER DISTINCTION:
+- SDC SHEQ Compliance / SDC Health And Safety (Pty) Ltd / SDC Health and Safety is the BUYER/CUSTOMER — they are the company receiving and paying the invoice. NEVER identify them as the supplier.
+- The SUPPLIER is the company that ISSUED the invoice — typically shown in the header, logo area, or "From" section of the invoice.
+- The billing address (showing SDC's address) is where the invoice is SENT TO — this is the customer, not the supplier.
+- Look for the issuing company's name near the logo, at the top of the invoice, or in the "From" or "Supplier" field.
+
 Return ONLY a valid JSON object with this exact structure — no markdown, no explanation:
 
 {
