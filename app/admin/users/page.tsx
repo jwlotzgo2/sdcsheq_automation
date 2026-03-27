@@ -59,6 +59,7 @@ export default function UsersPage() {
   const [saving, setSaving]           = useState(false)
   const [saveMsg, setSaveMsg]         = useState('')
   const [showInvite, setShowInvite]   = useState(false)
+  const [editName, setEditName]         = useState('')
   const isMobile = useIsMobile()
 
   const supabase = createBrowserClient(
@@ -78,6 +79,10 @@ export default function UsersPage() {
   }, [])
 
   const isAdmin = currentRole === 'AP_ADMIN'
+
+  useEffect(() => {
+    setEditName(selected?.full_name ?? '')
+  }, [selected])
 
   const fetchUsers = async () => {
     setLoading(true)
@@ -169,7 +174,6 @@ export default function UsersPage() {
   }
 
   const DetailPanel = () => {
-    const [editName, setEditName] = useState(selected?.full_name ?? '')
     if (!selected) return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MUTED, fontSize: '13px', flexDirection: 'column', gap: '8px' }}>
         <div style={{ fontSize: '28px' }}>👤</div>
