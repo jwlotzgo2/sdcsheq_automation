@@ -17,6 +17,7 @@ const LIGHT  = '#F5F5F2'
 const MUTED  = '#8A8878'
 
 const PRIMARY_NAV = [
+  { href: '/',             label: 'Home',           icon: '🏠' },
   { href: '/dashboard',  label: 'Dashboard',     icon: '▦' },
   { href: '/review',     label: 'Review',         icon: '📋' },
   { href: '/approve',    label: 'Approve',        icon: '✅' },
@@ -29,7 +30,6 @@ const MORE_NAV = [
   { href: '/suppliers',       label: 'Suppliers',      icon: '🏢' },
   { href: '/gl-codes',        label: 'GL Codes',       icon: '📒' },
   { href: '/capture',         label: 'Capture',        icon: '📷' },
-  { href: '/xero-push',       label: 'Xero Push',      icon: '⬆' },
   { href: '/help',            label: 'Help',           icon: '❓' },
   { href: '/xero-push',       label: 'Push to Xero',   icon: '📤' },
   { href: '/admin/users',     label: 'Users',          icon: '👥' },
@@ -153,7 +153,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <NavItem href="/gl-codes"   label="GL Codes"      icon="📒" />
             <NavItem href="/capture"    label="Capture"       icon="📷" />
           <NavItem href="/xero-push"  label="Push to Xero"  icon="📤" />
-          <NavItem href="/xero-push"   label="Xero Push"     icon="⬆" />
           <NavItem href="/help"        label="Help"          icon="❓" />
             <div style={{ padding: '12px 12px 6px', color: 'rgba(255,255,255,0.3)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '8px' }}>Admin</div>
             <NavItem href="/admin/users"    label="Users"    icon="👥" />
