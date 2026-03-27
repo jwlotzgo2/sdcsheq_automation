@@ -75,7 +75,7 @@ const UserCard = memo(function UserCard({ user, isSelected, onSelect }: {
   )
 })
 
-const DetailPanel = memo(function DetailPanel({ user, isAdmin, saving, saveMsg, onRoleChange, onToggleActive, onNameSave }: {
+const DetailPanel = memo(function DetailPanel({ user, isAdmin, saving, saveMsg, onRoleChange, onToggleActive, onToggleCapture, onNameSave }: {
   user: any; isAdmin: boolean; saving: boolean; saveMsg: string
   onRoleChange: (userId: string, role: string) => void
   onToggleActive: (userId: string, isActive: boolean) => void
