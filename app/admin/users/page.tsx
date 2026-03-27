@@ -13,14 +13,14 @@ const MUTED  = '#8A8878'
 const WHITE  = '#FFFFFF'
 const RED    = '#EF4444'
 
-const ROLES = ['AP_CLERK', 'REVIEWER', 'APPROVER', 'FINANCE_MANAGER', 'AP_ADMIN']
+const ROLES = ['AP_CLERK', 'REVIEWER', 'APPROVER', 'FINANCE_MANAGER', 'ADMIN']
 
-const ROLE_STYLES: Record<string, { color: string; bg: string; label: string }> = {
-  AP_CLERK:        { color: MUTED,     bg: LIGHT,      label: 'AP Clerk' },
-  REVIEWER:        { color: '#3B82F6', bg: '#EBF4FF',  label: 'Reviewer' },
-  APPROVER:        { color: OLIVE,     bg: '#F0FDF4',  label: 'Approver' },
-  FINANCE_MANAGER: { color: AMBER,     bg: '#FEF3C7',  label: 'Finance Manager' },
-  AP_ADMIN:        { color: '#8B5CF6', bg: '#F5F3FF',  label: 'Admin' },
+const ROLE_META: Record<string, { color: string; bg: string; label: string; description: string }> = {
+  AP_CLERK:        { color: MUTED,     bg: LIGHT,     label: 'AP Clerk',         description: 'Review invoices, assign GL codes' },
+  REVIEWER:        { color: '#3B82F6', bg: '#EBF4FF', label: 'Reviewer',         description: 'Review and submit for approval' },
+  APPROVER:        { color: OLIVE,     bg: '#F0FDF4', label: 'Approver',         description: 'Approve invoices, push to Xero' },
+  FINANCE_MANAGER: { color: AMBER,     bg: '#FEF3C7', label: 'Finance Manager',  description: 'Full pipeline visibility' },
+  ADMIN:           { color: '#8B5CF6', bg: '#F5F3FF', label: 'Admin',            description: 'Full access including user management' },
 }
 
 const initials = (name: string) =>
@@ -33,253 +33,334 @@ const avatarColor = (name: string) => {
   return colors[Math.abs(hash) % colors.length]
 }
 
-
+const fmtDate = (val: any) =>
+  val ? new Date(val).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 
 function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(false)
+  const [v, setV] = useState(false)
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768)
-    check()
-    window.addEventListener('resize', check)
+    const check = () => setV(window.innerWidth < 768)
+    check(); window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])
-  return isMobile
+  return v
 }
 
 export default function UsersPage() {
-  const isMobile = useIsMobile()
   const [users, setUsers]           = useState<any[]>([])
   const [loading, setLoading]       = useState(true)
-  const [showInvite, setShowInvite] = useState(false)
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [currentRole, setCurrentRole] = useState('')
+  const [selected, setSelected]     = useState<any>(null)
   const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState('REVIEWER')
-  const [inviting, setInviting]     = useState(false)
-  const [inviteMsg, setInviteMsg]   = useState('')
-  const [savingRole, setSavingRole] = useState<string | null>(null)
+  const [inviteRole, setInviteRole]   = useState('REVIEWER')
+  const [inviting, setInviting]       = useState(false)
+  const [inviteMsg, setInviteMsg]     = useState('')
+  const [saving, setSaving]           = useState(false)
+  const [saveMsg, setSaveMsg]         = useState('')
+  const [showInvite, setShowInvite]   = useState(false)
+  const isMobile = useIsMobile()
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  useEffect(() => { fetchUsers() }, [])
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setCurrentUser(data.user)
+      if (data.user?.email) {
+        supabase.from('user_profiles').select('role').eq('email', data.user.email).maybeSingle()
+          .then(({ data: p }) => setCurrentRole(p?.role ?? ''))
+      }
+    })
+    fetchUsers()
+  }, [])
+
+  const isAdmin = currentRole === 'ADMIN'
 
   const fetchUsers = async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .order('created_at')
+    const { data } = await supabase.from('user_profiles').select('*').order('created_at')
     setUsers(data ?? [])
     setLoading(false)
   }
 
   const handleInvite = async () => {
     if (!inviteEmail) return
-    setInviting(true)
-    setInviteMsg('')
-
-    // Send magic link via Supabase Admin — we use the API route
+    setInviting(true); setInviteMsg('')
     const res = await fetch('/api/admin/invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
     })
     const data = await res.json()
-
-    if (data.error) {
-      setInviteMsg(`✗ ${data.error}`)
-    } else {
-      setInviteMsg(`✓ Invitation sent to ${inviteEmail}`)
+    if (data.success) {
+      setInviteMsg(`✓ Invite sent to ${inviteEmail}`)
       setInviteEmail('')
+      setShowInvite(false)
       fetchUsers()
+    } else {
+      setInviteMsg(`Error: ${data.error}`)
     }
     setInviting(false)
   }
 
-  const updateRole = async (userId: string, role: string) => {
-    setSavingRole(userId)
+  const handleRoleChange = async (userId: string, role: string) => {
+    if (!isAdmin) return
+    setSaving(true)
     await supabase.from('user_profiles').update({ role }).eq('user_id', userId)
-    await fetchUsers()
-    setSavingRole(null)
+    setSelected((prev: any) => prev ? { ...prev, role } : prev)
+    setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, role } : u))
+    setSaveMsg('Role updated')
+    setTimeout(() => setSaveMsg(''), 2000)
+    setSaving(false)
   }
 
-  const toggleActive = async (userId: string, isActive: boolean) => {
+  const handleToggleActive = async (userId: string, isActive: boolean) => {
+    if (!isAdmin) return
+    setSaving(true)
     await supabase.from('user_profiles').update({ is_active: !isActive }).eq('user_id', userId)
-    fetchUsers()
+    setSelected((prev: any) => prev ? { ...prev, is_active: !isActive } : prev)
+    setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, is_active: !isActive } : u))
+    setSaving(false)
+  }
+
+  const handleNameSave = async (userId: string, fullName: string) => {
+    if (!isAdmin) return
+    setSaving(true)
+    await supabase.from('user_profiles').update({ full_name: fullName }).eq('user_id', userId)
+    setSaveMsg('Name updated')
+    setTimeout(() => setSaveMsg(''), 2000)
+    setSaving(false)
   }
 
   const activeUsers   = users.filter(u => u.is_active)
   const inactiveUsers = users.filter(u => !u.is_active)
 
-  return (
-    <AppShell>
-      <div style={{ maxWidth: '900px', padding: isMobile ? '0' : undefined }}>
-
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-          <div>
-            <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: DARK, margin: '0 0 4px' }}>User Management</h1>
-            <p style={{ fontSize: '12px', color: MUTED, margin: 0 }}>{activeUsers.length} active user{activeUsers.length !== 1 ? 's' : ''}</p>
+  const UserCard = ({ user }: { user: any }) => {
+    const role   = ROLE_META[user.role] ?? { color: MUTED, bg: LIGHT, label: user.role ?? 'No role', description: '' }
+    const color  = avatarColor(user.email ?? '')
+    const isSelected = selected?.user_id === user.user_id
+    return (
+      <div onClick={() => setSelected(isSelected ? null : user)}
+        style={{ padding: '12px 16px', borderBottom: `1px solid ${LIGHT}`, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: isSelected ? '#FEF3C7' : WHITE, borderLeft: isSelected ? `3px solid ${AMBER}` : '3px solid transparent' }}
+        onMouseEnter={e => { if (!isSelected) e.currentTarget.style.backgroundColor = LIGHT }}
+        onMouseLeave={e => { if (!isSelected) e.currentTarget.style.backgroundColor = WHITE }}>
+        <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: WHITE, fontSize: '12px', fontWeight: '700', flexShrink: 0 }}>
+          {initials(user.full_name || user.email || '?')}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: '13px', fontWeight: '600', color: DARK, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {user.full_name || user.email?.split('@')[0] || '—'}
           </div>
-          <button
-            onClick={() => { setShowInvite(true); setInviteMsg('') }}
-            style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', backgroundColor: AMBER, color: WHITE, fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
-          >
-            + Invite User
-          </button>
+          <div style={{ fontSize: '11px', color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</div>
+        </div>
+        <div style={{ flexShrink: 0 }}>
+          <span style={{ fontSize: '10px', fontWeight: '600', color: role.color, backgroundColor: role.bg, padding: '2px 8px', borderRadius: '10px' }}>
+            {role.label}
+          </span>
+        </div>
+        {!user.is_active && (
+          <span style={{ fontSize: '10px', color: RED, fontWeight: '600' }}>Inactive</span>
+        )}
+      </div>
+    )
+  }
+
+  const DetailPanel = () => {
+    const [editName, setEditName] = useState(selected?.full_name ?? '')
+    if (!selected) return (
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MUTED, fontSize: '13px', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ fontSize: '28px' }}>👤</div>
+        <div>Select a user to view details</div>
+      </div>
+    )
+    const role  = ROLE_META[selected.role] ?? { color: MUTED, bg: LIGHT, label: selected.role ?? 'No role', description: '' }
+    const color = avatarColor(selected.email ?? '')
+    return (
+      <div style={{ padding: '20px', overflowY: 'auto' }}>
+        {/* Avatar + name */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px' }}>
+          <div style={{ width: '52px', height: '52px', borderRadius: '50%', backgroundColor: color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: WHITE, fontSize: '18px', fontWeight: '700', flexShrink: 0 }}>
+            {initials(selected.full_name || selected.email || '?')}
+          </div>
+          <div>
+            <div style={{ fontSize: '16px', fontWeight: '700', color: DARK }}>{selected.full_name || selected.email?.split('@')[0]}</div>
+            <div style={{ fontSize: '12px', color: MUTED }}>{selected.email}</div>
+          </div>
         </div>
 
-        {/* Role legend */}
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px' }}>
-          {Object.entries(ROLE_STYLES).map(([role, style]) => (
-            <div key={role} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '6px', backgroundColor: style.bg, border: `1px solid ${BORDER}` }}>
-              <span style={{ fontSize: '11px', fontWeight: '600', color: style.color }}>{style.label}</span>
+        {/* Details grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+          {[
+            { label: 'Email',       value: selected.email },
+            { label: 'Joined',      value: fmtDate(selected.created_at) },
+            { label: 'Last updated', value: fmtDate(selected.updated_at) },
+            { label: 'Status',      value: selected.is_active ? '✓ Active' : '✗ Inactive' },
+          ].map(({ label, value }) => (
+            <div key={label} style={{ backgroundColor: LIGHT, borderRadius: '8px', padding: '10px 12px' }}>
+              <div style={{ fontSize: '10px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '3px' }}>{label}</div>
+              <div style={{ fontSize: '13px', fontWeight: '500', color: DARK }}>{value}</div>
             </div>
           ))}
         </div>
 
-        {/* Users table */}
-        <div style={{ backgroundColor: WHITE, borderRadius: '10px', border: `1px solid ${BORDER}`, overflow: 'hidden', marginBottom: '16px' }}>
-          <div style={{ padding: '12px 20px', borderBottom: `1px solid ${BORDER}`, fontSize: '11px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', backgroundColor: LIGHT }}>
-            Active Users
+        {/* Full name */}
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Display Name</label>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input value={editName} onChange={e => setEditName(e.target.value)}
+              disabled={!isAdmin}
+              placeholder="Full name..."
+              style={{ flex: 1, padding: '8px 10px', fontSize: '13px', border: `1.5px solid ${BORDER}`, borderRadius: '7px', color: DARK, backgroundColor: isAdmin ? WHITE : LIGHT, outline: 'none' }} />
+            {isAdmin && (
+              <button onClick={() => handleNameSave(selected.user_id, editName)} disabled={saving}
+                style={{ padding: '8px 14px', borderRadius: '7px', border: 'none', backgroundColor: AMBER, color: WHITE, fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>
+                Save
+              </button>
+            )}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '36px 1fr 120px' : '36px 1fr 180px 160px 80px', padding: '10px 16px', backgroundColor: LIGHT, borderBottom: `1px solid ${BORDER}` }}>
-            {(isMobile ? ['', 'User', 'Role'] : ['', 'User', 'Role', 'Last Sign In', '']).map(h => (
-              <div key={h} style={{ fontSize: '11px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
-            ))}
-          </div>
+        </div>
 
-          {loading ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: MUTED, fontSize: '13px' }}>Loading...</div>
-          ) : activeUsers.length === 0 ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: MUTED, fontSize: '13px' }}>No active users.</div>
+        {/* Role */}
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Role</label>
+          {isAdmin ? (
+            <select value={selected.role ?? ''} onChange={e => handleRoleChange(selected.user_id, e.target.value)}
+              style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1.5px solid ${BORDER}`, borderRadius: '7px', backgroundColor: WHITE, color: DARK }}>
+              <option value="">— No role —</option>
+              {ROLES.map(r => <option key={r} value={r}>{ROLE_META[r]?.label ?? r}</option>)}
+            </select>
           ) : (
-            activeUsers.map((user, i) => {
-              const roleStyle = ROLE_STYLES[user.role] ?? ROLE_STYLES['AP_CLERK']
-              const color     = avatarColor(user.email)
-              const name      = user.full_name || user.email
-              return (
-                <div key={user.id} style={{
-                  display: 'grid', gridTemplateColumns: isMobile ? '36px 1fr 120px' : '36px 1fr 180px 160px 80px',
-                  padding: '14px 20px', borderBottom: i < activeUsers.length - 1 ? `1px solid ${LIGHT}` : 'none',
-                  alignItems: 'center',
-                }}>
-                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: WHITE, fontSize: '10px', fontWeight: '700' }}>
-                    {initials(name)}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '13px', fontWeight: '600', color: DARK }}>{user.full_name || '—'}</div>
-                    <div style={{ fontSize: '11px', color: MUTED, marginTop: '2px' }}>{user.email}</div>
-                  </div>
-                  <div>
-                    <select
-                      value={user.role}
-                      onChange={e => updateRole(user.user_id, e.target.value)}
-                      disabled={savingRole === user.user_id}
-                      style={{
-                        padding: '5px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: '600',
-                        border: `1.5px solid ${BORDER}`, backgroundColor: roleStyle.bg,
-                        color: roleStyle.color, cursor: 'pointer', outline: 'none',
-                      }}
-                    >
-                      {ROLES.map(r => (
-                        <option key={r} value={r}>{ROLE_STYLES[r]?.label ?? r}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {!isMobile && <div style={{ fontSize: '11px', color: MUTED }}>{user.updated_at ? new Date(user.updated_at).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</div>}
-                  {!isMobile && <div><button onClick={() => toggleActive(user.user_id, user.is_active)} style={{ padding: '4px 10px', borderRadius: '6px', border: `1px solid ${BORDER}`, backgroundColor: WHITE, color: MUTED, fontSize: '11px', cursor: 'pointer' }}>Deactivate</button></div>}
-                </div>
-              )
-            })
+            <div style={{ display: 'inline-block', backgroundColor: role.bg, borderRadius: '20px', padding: '5px 14px', fontSize: '13px', fontWeight: '600', color: role.color }}>
+              {role.label}
+            </div>
+          )}
+          {selected.role && ROLE_META[selected.role] && (
+            <div style={{ fontSize: '11px', color: MUTED, marginTop: '5px' }}>{ROLE_META[selected.role].description}</div>
           )}
         </div>
 
-        {/* Inactive users */}
-        {inactiveUsers.length > 0 && (
-          <div style={{ backgroundColor: WHITE, borderRadius: '10px', border: `1px solid ${BORDER}`, overflow: 'hidden' }}>
-            <div style={{ padding: '12px 20px', borderBottom: `1px solid ${BORDER}`, fontSize: '11px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', backgroundColor: LIGHT }}>
-              Inactive Users
+        {/* Active toggle — admin only */}
+        {isAdmin && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', backgroundColor: LIGHT, borderRadius: '8px', marginBottom: '16px' }}>
+            <div>
+              <div style={{ fontSize: '13px', fontWeight: '600', color: DARK }}>Account Active</div>
+              <div style={{ fontSize: '11px', color: MUTED }}>Inactive users cannot sign in</div>
             </div>
-            {inactiveUsers.map((user, i) => (
-              <div key={user.id} style={{
-                display: 'grid', gridTemplateColumns: '36px 1fr 180px 80px',
-                padding: '12px 20px', borderBottom: i < inactiveUsers.length - 1 ? `1px solid ${LIGHT}` : 'none',
-                alignItems: 'center', opacity: 0.6,
-              }}>
-                <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: MUTED, display: 'flex', alignItems: 'center', justifyContent: 'center', color: WHITE, fontSize: '10px', fontWeight: '700' }}>
-                  {initials(user.email)}
-                </div>
-                <div>
-                  <div style={{ fontSize: '13px', color: DARK }}>{user.full_name || '—'}</div>
-                  <div style={{ fontSize: '11px', color: MUTED }}>{user.email}</div>
-                </div>
-                <div style={{ fontSize: '11px', color: MUTED }}>{ROLE_STYLES[user.role]?.label ?? user.role}</div>
-                <button
-                  onClick={() => toggleActive(user.user_id, user.is_active)}
-                  style={{ padding: '4px 10px', borderRadius: '6px', border: `1px solid ${OLIVE}`, backgroundColor: WHITE, color: OLIVE, fontSize: '11px', cursor: 'pointer', fontWeight: '600' }}
-                >
-                  Reactivate
-                </button>
-              </div>
-            ))}
+            <button onClick={() => handleToggleActive(selected.user_id, selected.is_active)} disabled={saving}
+              style={{ padding: '7px 16px', borderRadius: '20px', border: 'none', backgroundColor: selected.is_active ? OLIVE : RED, color: WHITE, fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
+              {selected.is_active ? 'Active' : 'Inactive'}
+            </button>
           </div>
         )}
+
+        {saveMsg && <div style={{ fontSize: '12px', color: OLIVE, fontWeight: '600', textAlign: 'center' }}>✓ {saveMsg}</div>}
+      </div>
+    )
+  }
+
+  return (
+    <AppShell>
+      <div style={{ maxWidth: '900px', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 112px)' }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexShrink: 0 }}>
+          <div>
+            <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: DARK, margin: '0 0 4px' }}>Users</h1>
+            <p style={{ fontSize: '12px', color: MUTED, margin: 0 }}>{activeUsers.length} active · {inactiveUsers.length} inactive</p>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {inviteMsg && <span style={{ fontSize: '12px', color: OLIVE, fontWeight: '600' }}>{inviteMsg}</span>}
+            {isAdmin && (
+              <button onClick={() => setShowInvite(true)}
+                style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', backgroundColor: AMBER, color: WHITE, fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
+                + Invite User
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Main layout */}
+        <div style={{ display: 'flex', gap: '12px', flex: 1, minHeight: 0 }}>
+          {/* User list */}
+          <div style={{ width: isMobile ? '100%' : '340px', flexShrink: 0, backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '10px 14px', borderBottom: `1px solid ${BORDER}`, fontSize: '10px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Active ({activeUsers.length})
+            </div>
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              {loading ? (
+                <div style={{ padding: '24px', textAlign: 'center', color: MUTED, fontSize: '13px' }}>Loading...</div>
+              ) : (
+                <>
+                  {activeUsers.map(u => <UserCard key={u.user_id} user={u} />)}
+                  {inactiveUsers.length > 0 && (
+                    <>
+                      <div style={{ padding: '8px 14px', fontSize: '10px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', backgroundColor: LIGHT, borderTop: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}` }}>
+                        Inactive ({inactiveUsers.length})
+                      </div>
+                      {inactiveUsers.map(u => <UserCard key={u.user_id} user={u} />)}
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Detail panel — desktop only */}
+          {!isMobile && (
+            <div style={{ flex: 1, backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ padding: '10px 14px', borderBottom: `1px solid ${BORDER}`, fontSize: '10px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                User Detail
+              </div>
+              <DetailPanel />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Invite modal */}
       {showInvite && (
-        <div onClick={() => !inviting && setShowInvite(false)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div onClick={e => e.stopPropagation()} style={{ backgroundColor: WHITE, borderRadius: '12px', padding: '32px', width: '100%', maxWidth: '440px', boxShadow: '0 24px 80px rgba(0,0,0,0.2)' }}>
+        <div onClick={() => setShowInvite(false)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()} style={{ backgroundColor: '#F5F5F2', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '420px', boxShadow: '0 24px 80px rgba(0,0,0,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2 style={{ fontSize: '17px', fontWeight: '700', color: DARK, margin: 0 }}>Invite User</h2>
-              {!inviting && <button onClick={() => setShowInvite(false)} style={{ background: 'none', border: 'none', fontSize: '20px', color: MUTED, cursor: 'pointer' }}>×</button>}
+              <h2 style={{ fontSize: '16px', fontWeight: '700', color: DARK, margin: 0 }}>Invite User</h2>
+              <button onClick={() => setShowInvite(false)} style={{ background: 'none', border: 'none', fontSize: '20px', color: MUTED, cursor: 'pointer' }}>×</button>
             </div>
-
-            <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: DARK, marginBottom: '6px' }}>Email address</label>
-              <input
-                type="email"
-                value={inviteEmail}
-                onChange={e => setInviteEmail(e.target.value)}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: DARK, marginBottom: '5px' }}>Email address</label>
+              <input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleInvite()}
                 placeholder="user@sdcsheq.co.za"
-                style={{ width: '100%', padding: '10px 12px', fontSize: '14px', border: `1.5px solid ${BORDER}`, borderRadius: '8px', boxSizing: 'border-box', color: DARK, outline: 'none' }}
-              />
+                style={{ width: '100%', padding: '10px 12px', fontSize: '14px', border: `1.5px solid ${BORDER}`, borderRadius: '8px', outline: 'none', boxSizing: 'border-box', color: DARK }} />
             </div>
-
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: DARK, marginBottom: '6px' }}>Role</label>
-              <select
-                value={inviteRole}
-                onChange={e => setInviteRole(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', fontSize: '14px', border: `1.5px solid ${BORDER}`, borderRadius: '8px', color: DARK, backgroundColor: WHITE }}
-              >
-                {ROLES.map(r => (
-                  <option key={r} value={r}>{ROLE_STYLES[r]?.label ?? r}</option>
-                ))}
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: DARK, marginBottom: '5px' }}>Role</label>
+              <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
+                style={{ width: '100%', padding: '10px 12px', fontSize: '14px', border: `1.5px solid ${BORDER}`, borderRadius: '8px', backgroundColor: WHITE, color: DARK }}>
+                {ROLES.map(r => <option key={r} value={r}>{ROLE_META[r]?.label ?? r} — {ROLE_META[r]?.description}</option>)}
               </select>
             </div>
-
-            {inviteMsg && (
-              <div style={{ padding: '10px 12px', borderRadius: '7px', marginBottom: '16px', fontSize: '13px', backgroundColor: inviteMsg.startsWith('✓') ? '#DCFCE7' : '#FEE2E2', color: inviteMsg.startsWith('✓') ? OLIVE : RED }}>
-                {inviteMsg}
-              </div>
-            )}
-
-            <div style={{ backgroundColor: LIGHT, borderRadius: '7px', padding: '12px', marginBottom: '20px', fontSize: '12px', color: MUTED, lineHeight: 1.6 }}>
-              The user will receive a magic link email to sign in. Their role will be set to <strong style={{ color: DARK }}>{ROLE_STYLES[inviteRole]?.label}</strong> automatically on first login.
-            </div>
-
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setShowInvite(false)} disabled={inviting} style={{ flex: 1, padding: '11px', borderRadius: '8px', border: `1.5px solid ${BORDER}`, backgroundColor: WHITE, color: MUTED, fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
+              <button onClick={() => setShowInvite(false)} style={{ flex: 1, padding: '11px', borderRadius: '8px', border: `1.5px solid ${BORDER}`, backgroundColor: WHITE, color: MUTED, fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
                 Cancel
               </button>
-              <button onClick={handleInvite} disabled={inviting || !inviteEmail} style={{ flex: 2, padding: '11px', borderRadius: '8px', border: 'none', backgroundColor: inviting || !inviteEmail ? '#94A3B8' : AMBER, color: WHITE, fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>
-                {inviting ? 'Sending...' : 'Send Invitation'}
+              <button onClick={handleInvite} disabled={inviting || !inviteEmail}
+                style={{ flex: 2, padding: '11px', borderRadius: '8px', border: 'none', backgroundColor: inviting || !inviteEmail ? '#C8B89A' : AMBER, color: WHITE, fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
+                {inviting ? 'Sending...' : 'Send Invite →'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile detail sheet */}
+      {isMobile && selected && (
+        <div onClick={() => setSelected(null)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'flex-end' }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: '100%', backgroundColor: WHITE, borderRadius: '16px 16px 0 0', maxHeight: '85vh', overflowY: 'auto' }}>
+            <div style={{ width: '40px', height: '4px', backgroundColor: BORDER, borderRadius: '2px', margin: '12px auto 0' }} />
+            <DetailPanel />
           </div>
         </div>
       )}
