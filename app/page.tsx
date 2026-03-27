@@ -142,15 +142,7 @@ export default function HomePage() {
       urgent: stats.pendingApproval > 0,
       show: true,
     },
-    {
-      icon: '📷',
-      title: 'Capture Receipt',
-      description: 'Photograph and submit an expense receipt for processing',
-      href: '/capture',
-      color: DARK,
-      bg: LIGHT,
-      show: true,
-    },
+
     {
       icon: '📤',
       title: 'Push to Xero',

@@ -13,14 +13,14 @@ const MUTED  = '#8A8878'
 const WHITE  = '#FFFFFF'
 const RED    = '#EF4444'
 
-const ROLES = ['AP_CLERK', 'REVIEWER', 'APPROVER', 'FINANCE_MANAGER', 'ADMIN']
+const ROLES = ['AP_CLERK', 'REVIEWER', 'APPROVER', 'FINANCE_MANAGER', 'AP_ADMIN']
 
 const ROLE_META: Record<string, { color: string; bg: string; label: string; description: string }> = {
   AP_CLERK:        { color: MUTED,     bg: LIGHT,     label: 'AP Clerk',         description: 'Review invoices, assign GL codes' },
   REVIEWER:        { color: '#3B82F6', bg: '#EBF4FF', label: 'Reviewer',         description: 'Review and submit for approval' },
   APPROVER:        { color: OLIVE,     bg: '#F0FDF4', label: 'Approver',         description: 'Approve invoices, push to Xero' },
   FINANCE_MANAGER: { color: AMBER,     bg: '#FEF3C7', label: 'Finance Manager',  description: 'Full pipeline visibility' },
-  ADMIN:           { color: '#8B5CF6', bg: '#F5F3FF', label: 'Admin',            description: 'Full access including user management' },
+  AP_ADMIN:        { color: '#8B5CF6', bg: '#F5F3FF', label: 'Admin',            description: 'Full access including user management' },
 }
 
 const initials = (name: string) =>
@@ -77,7 +77,7 @@ export default function UsersPage() {
     fetchUsers()
   }, [])
 
-  const isAdmin = currentRole === 'ADMIN'
+  const isAdmin = currentRole === 'AP_ADMIN'
 
   const fetchUsers = async () => {
     setLoading(true)
