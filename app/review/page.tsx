@@ -380,8 +380,11 @@ export default function ReviewPage() {
                 <div style={{ padding: '24px 12px', textAlign: 'center', color: MUTED, fontSize: '12px' }}>No invoices to review</div>
               ) : invoices.map(inv => (
                 <div key={inv.id} onClick={() => selectInvoice(inv.id)} style={{ padding: '10px 12px', borderBottom: `1px solid ${LIGHT}`, cursor: 'pointer', backgroundColor: selected?.id === inv.id ? '#FEF3C7' : WHITE, borderLeft: selected?.id === inv.id ? `3px solid ${AMBER}` : '3px solid transparent' }}>
-                  <div style={{ fontSize: '12px', fontWeight: '600', color: DARK, marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{inv.supplier_name ?? 'Unknown'}</div>
-                  <div style={{ fontSize: '10px', color: MUTED, marginBottom: '3px' }}>{inv.invoice_number ?? '—'}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '2px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: '600', color: DARK, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.supplier_name ?? 'Unknown'}</div>
+                    {inv.record_type === 'EXPENSE' && <span style={{ fontSize: '9px', fontWeight: '700', color: '#13B5EA', backgroundColor: '#EBF4FF', padding: '1px 5px', borderRadius: '6px', flexShrink: 0 }}>EXPENSE</span>}
+                  </div>
+                  <div style={{ fontSize: '10px', color: MUTED, marginBottom: '3px' }}>{inv.invoice_number ?? inv.submitted_by?.split('@')[0] ?? '—'}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: '10px', color: MUTED }}>{fmtDate(inv.invoice_date)}</span>
                     <span style={{ fontSize: '11px', fontWeight: '700', color: DARK }}>{fmt(inv.amount_incl)}</span>

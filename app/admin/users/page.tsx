@@ -79,6 +79,7 @@ const DetailPanel = memo(function DetailPanel({ user, isAdmin, saving, saveMsg, 
   user: any; isAdmin: boolean; saving: boolean; saveMsg: string
   onRoleChange: (userId: string, role: string) => void
   onToggleActive: (userId: string, isActive: boolean) => void
+  onToggleCapture: (userId: string, current: boolean) => void
   onNameSave: (userId: string, name: string) => void
 }) {
   const [editName, setEditName] = useState(user?.full_name ?? '')
@@ -165,7 +166,7 @@ const DetailPanel = memo(function DetailPanel({ user, isAdmin, saving, saveMsg, 
 
       {/* Active toggle */}
       {isAdmin && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', backgroundColor: LIGHT, borderRadius: '8px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', backgroundColor: LIGHT, borderRadius: '8px', marginBottom: '10px' }}>
           <div>
             <div style={{ fontSize: '13px', fontWeight: '600', color: DARK }}>Account Active</div>
             <div style={{ fontSize: '11px', color: MUTED }}>Inactive users cannot sign in</div>
@@ -173,6 +174,20 @@ const DetailPanel = memo(function DetailPanel({ user, isAdmin, saving, saveMsg, 
           <button onClick={() => onToggleActive(user.user_id, user.is_active)} disabled={saving}
             style={{ padding: '7px 16px', borderRadius: '20px', border: 'none', backgroundColor: user.is_active ? OLIVE : RED, color: WHITE, fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
             {user.is_active ? 'Active' : 'Inactive'}
+          </button>
+        </div>
+      )}
+
+      {/* Expense capture toggle */}
+      {isAdmin && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', backgroundColor: LIGHT, borderRadius: '8px', marginBottom: '16px' }}>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: '600', color: DARK }}>Can Capture Expenses</div>
+            <div style={{ fontSize: '11px', color: MUTED }}>Allow this user to submit expense receipts</div>
+          </div>
+          <button onClick={() => onToggleCapture(user.user_id, user.can_capture_expenses)} disabled={saving}
+            style={{ padding: '7px 16px', borderRadius: '20px', border: 'none', backgroundColor: user.can_capture_expenses ? '#13B5EA' : '#94A3B8', color: WHITE, fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
+            {user.can_capture_expenses ? 'Enabled' : 'Disabled'}
           </button>
         </div>
       )}
@@ -247,6 +262,14 @@ export default function UsersPage() {
     setSelected((prev: any) => prev ? { ...prev, role } : prev)
     setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, role } : u))
     setSaveMsg('Role updated'); setTimeout(() => setSaveMsg(''), 2000)
+    setSaving(false)
+  }
+
+  const handleToggleCapture = async (userId: string, current: boolean) => {
+    setSaving(true)
+    await supabase.from('user_profiles').update({ can_capture_expenses: !current }).eq('user_id', userId)
+    setSelected((prev: any) => prev ? { ...prev, can_capture_expenses: !current } : prev)
+    setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, can_capture_expenses: !current } : u))
     setSaving(false)
   }
 
@@ -329,7 +352,7 @@ export default function UsersPage() {
               </div>
               <DetailPanel
                 user={selected} isAdmin={isAdmin} saving={saving} saveMsg={saveMsg}
-                onRoleChange={handleRoleChange} onToggleActive={handleToggleActive} onNameSave={handleNameSave}
+                onRoleChange={handleRoleChange} onToggleActive={handleToggleActive} onToggleCapture={handleToggleCapture} onNameSave={handleNameSave}
               />
             </div>
           )}
@@ -376,7 +399,7 @@ export default function UsersPage() {
             <div style={{ width: '40px', height: '4px', backgroundColor: BORDER, borderRadius: '2px', margin: '12px auto 4px' }} />
             <DetailPanel
               user={selected} isAdmin={isAdmin} saving={saving} saveMsg={saveMsg}
-              onRoleChange={handleRoleChange} onToggleActive={handleToggleActive} onNameSave={handleNameSave}
+              onRoleChange={handleRoleChange} onToggleActive={handleToggleActive} onToggleCapture={handleToggleCapture} onNameSave={handleNameSave}
             />
           </div>
         </div>

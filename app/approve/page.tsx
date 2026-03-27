@@ -151,7 +151,7 @@ export default function ApprovePage() {
   useEffect(() => { if (glCodes.length === 0) fetchGlCodes() }, [])
 
   const fetchInvoices = async () => {
-    const { data } = await supabase.from('invoices').select('id, status, supplier_name, invoice_number, invoice_date, amount_incl, created_at').eq('status', 'PENDING_APPROVAL').order('created_at', { ascending: false })
+    const { data } = await supabase.from('invoices').select('id, status, supplier_name, invoice_number, invoice_date, amount_incl, created_at, record_type, submitted_by').eq('status', 'PENDING_APPROVAL').order('created_at', { ascending: false })
     setInvoices(data ?? [])
     if (data && data.length > 0 && !isMobile) selectInvoice(data[0].id)
   }
@@ -328,7 +328,10 @@ export default function ApprovePage() {
               {invoices.length === 0 ? <div style={{ padding: '24px 12px', textAlign: 'center', color: MUTED, fontSize: '12px' }}>No invoices pending approval</div> :
                 invoices.map(inv => (
                   <div key={inv.id} onClick={() => selectInvoice(inv.id)} style={{ padding: '10px 12px', borderBottom: `1px solid ${LIGHT}`, cursor: 'pointer', backgroundColor: selected?.id === inv.id ? '#F0FDF4' : WHITE, borderLeft: selected?.id === inv.id ? `3px solid ${OLIVE}` : '3px solid transparent' }}>
-                    <div style={{ fontSize: '12px', fontWeight: '600', color: DARK, marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{inv.supplier_name ?? 'Unknown'}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '2px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: '600', color: DARK, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.supplier_name ?? 'Unknown'}</div>
+                      {inv.record_type === 'EXPENSE' && <span style={{ fontSize: '9px', fontWeight: '700', color: '#13B5EA', backgroundColor: '#EBF4FF', padding: '1px 5px', borderRadius: '6px', flexShrink: 0 }}>EXPENSE</span>}
+                    </div>
                     <div style={{ fontSize: '10px', color: MUTED, marginBottom: '3px' }}>{inv.invoice_number ?? '—'}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ fontSize: '10px', color: MUTED }}>{fmtDate(inv.invoice_date)}</span>

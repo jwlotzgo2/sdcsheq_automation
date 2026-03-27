@@ -31,6 +31,7 @@ const MORE_NAV = [
   { href: '/gl-codes',        label: 'GL Codes',       icon: '📒' },
   { href: '/help',            label: 'Help',           icon: '❓' },
   { href: '/xero-push',       label: 'Push to Xero',   icon: '📤' },
+  { href: '/expenses',        label: 'Expenses',       icon: '🧾' },
   { href: '/admin/users',     label: 'Users',          icon: '👥' },
   { href: '/admin/settings',  label: 'Settings',       icon: '⚙️' },
 ]
@@ -56,6 +57,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [duplicateCount, setDuplicateCount]   = useState(0)
   const [drawerOpen, setDrawerOpen]           = useState(false)
   const { startTour } = useTour()
+  const [canCapture, setCanCapture] = useState(false)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -64,6 +66,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetchCounts()
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.email) {
+        supabase.from('user_profiles').select('can_capture_expenses').eq('email', data.user.email).maybeSingle()
+          .then(({ data: p }) => setCanCapture(p?.can_capture_expenses ?? false))
+      }
+    })
     const interval = setInterval(fetchCounts, 30000)
     return () => clearInterval(interval)
   }, [])
@@ -152,6 +160,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <NavItem href="/suppliers"  label="Suppliers"     icon="🏢" />
             <NavItem href="/gl-codes"   label="GL Codes"      icon="📒" />
             <NavItem href="/xero-push"  label="Push to Xero"  icon="📤" />
+          <NavItem href="/expenses"   label="Expenses"      icon="🧾" />
+          {canCapture && <NavItem href="/capture"    label="Capture"       icon="📷" />}
           <NavItem href="/help"        label="Help"          icon="❓" />
             <div style={{ padding: '12px 12px 6px', color: 'rgba(255,255,255,0.3)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '8px' }}>Admin</div>
             <NavItem href="/admin/users"    label="Users"    icon="👥" />
