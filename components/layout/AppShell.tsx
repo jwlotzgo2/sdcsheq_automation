@@ -26,10 +26,9 @@ const PRIMARY_NAV = [
 
 const MORE_NAV = [
   { href: '/duplicates',      label: 'Duplicates',     icon: '⚠️' },
-  { href: '/onboarding',      label: 'KYC',             icon: '👤' },
+  
   { href: '/suppliers',       label: 'Suppliers',      icon: '🏢' },
   { href: '/gl-codes',        label: 'GL Codes',       icon: '📒' },
-  { href: '/capture',         label: 'Capture',        icon: '📷' },
   { href: '/help',            label: 'Help',           icon: '❓' },
   { href: '/xero-push',       label: 'Push to Xero',   icon: '📤' },
   { href: '/admin/users',     label: 'Users',          icon: '👥' },
@@ -143,16 +142,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <nav style={{ padding: '12px 0', flex: 1 }}>
             <div style={{ padding: '0 12px 6px', color: 'rgba(255,255,255,0.3)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Main</div>
+            <NavItem href="/"           label="Home"          icon="🏠" />
             <NavItem href="/dashboard"  label="Dashboard"     icon="▦" />
             <NavItem href="/invoices"   label="Invoices"      icon="🗒" />
             <NavItem href="/review"     label="Review Queue"  icon="📋" badge={reviewCount} />
             <NavItem href="/approve"    label="Approve Queue" icon="✅" badge={approveCount} />
             <NavItem href="/duplicates" label="Duplicates"    icon="⚠️" badge={duplicateCount} />
-            <NavItem href="/onboarding" label="KYC"           icon="👤" />
+            
             <NavItem href="/suppliers"  label="Suppliers"     icon="🏢" />
             <NavItem href="/gl-codes"   label="GL Codes"      icon="📒" />
-            <NavItem href="/capture"    label="Capture"       icon="📷" />
-          <NavItem href="/xero-push"  label="Push to Xero"  icon="📤" />
+            <NavItem href="/xero-push"  label="Push to Xero"  icon="📤" />
           <NavItem href="/help"        label="Help"          icon="❓" />
             <div style={{ padding: '12px 12px 6px', color: 'rgba(255,255,255,0.3)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '8px' }}>Admin</div>
             <NavItem href="/admin/users"    label="Users"    icon="👥" />

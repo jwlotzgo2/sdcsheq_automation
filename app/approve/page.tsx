@@ -125,86 +125,84 @@ export default function ApprovePage() {
 
   const DetailContent = () => (
     <>
-      {/* Compact header */}
-      <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, padding: '10px 14px', flexShrink: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+      {/* Single-line header */}
+      <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, padding: '8px 12px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
           <div>
-            <span style={{ fontSize: '14px', fontWeight: 'bold', color: DARK }}>{selected.supplier_name ?? 'Unknown'}</span>
+            <span style={{ fontSize: '13px', fontWeight: '700', color: DARK }}>{selected.supplier_name ?? 'Unknown'}</span>
             <span style={{ fontSize: '11px', color: MUTED, marginLeft: '8px' }}>{selected.invoice_number}</span>
           </div>
-          <span style={{ fontSize: '15px', fontWeight: '700', color: DARK }}>{fmt(selected.amount_incl)}</span>
+          <span style={{ fontSize: '14px', fontWeight: '700', color: DARK }}>{fmt(selected.amount_incl)}</span>
         </div>
-        <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '12px' }}>
           {[{ label: 'Date', value: fmtDate(selected.invoice_date) }, { label: 'Due', value: fmtDate(selected.due_date) }, { label: 'Excl', value: fmt(selected.amount_excl) }, { label: 'VAT', value: fmt(selected.amount_vat) }].map(({ label, value }) => (
-            <div key={label} style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-              <span style={{ fontSize: '10px', color: MUTED, fontWeight: '600', textTransform: 'uppercase' }}>{label}:</span>
-              <span style={{ fontSize: '11px', fontWeight: '600', color: DARK }}>{value}</span>
+            <div key={label} style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
+              <span style={{ fontSize: '9px', color: MUTED, fontWeight: '600', textTransform: 'uppercase' }}>{label}:</span>
+              <span style={{ fontSize: '10px', fontWeight: '600', color: DARK }}>{value}</span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Reviewer note — show even if just "Submitted for approval" if there's an invoice note */}
-      {(reviewerNote || invoiceNote) && (
-        <div style={{ backgroundColor: '#FEF3C7', borderRadius: '8px', border: `1px solid #FDE68A`, padding: '10px 14px', flexShrink: 0 }}>
-          <div style={{ fontSize: '10px', fontWeight: '700', color: AMBER, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
-            📋 Reviewer Note
+      {/* Reviewer note */}
+      {reviewerNote && (
+        <div style={{ backgroundColor: '#FEF3C7', borderRadius: '8px', border: `1px solid #FDE68A`, padding: '7px 12px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+            <div>
+              <span style={{ fontSize: '9px', fontWeight: '700', color: AMBER, textTransform: 'uppercase', letterSpacing: '0.05em' }}>📋 Reviewer Note  </span>
+              <span style={{ fontSize: '12px', color: DARK }}>{reviewerNote.notes !== 'Submitted for approval' ? reviewerNote.notes : invoiceNote ?? 'No note added'}</span>
+            </div>
+            <span style={{ fontSize: '9px', color: MUTED, whiteSpace: 'nowrap', flexShrink: 0 }}>{reviewerNote.actor_email?.split('@')[0]}</span>
           </div>
-          <div style={{ fontSize: '13px', color: DARK }}>{reviewerNote?.notes && reviewerNote.notes !== 'Submitted for approval' ? reviewerNote.notes : invoiceNote ?? '(No specific note added — invoice submitted for approval)'}</div>
-          {reviewerNote && <div style={{ fontSize: '10px', color: MUTED, marginTop: '3px' }}>{reviewerNote.actor_email} · {fmtDT(reviewerNote.created_at)}</div>}
         </div>
       )}
 
       {/* Line items */}
       <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, overflow: 'hidden', flexShrink: 0 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 40px 80px 80px 170px', padding: '6px 12px', backgroundColor: LIGHT, borderBottom: `1px solid ${BORDER}` }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 36px 76px 76px 160px', padding: '5px 10px', backgroundColor: LIGHT, borderBottom: `1px solid ${BORDER}` }}>
           {['Description', 'Qty', 'Unit', 'Total', 'GL Code'].map(h => (
             <div key={h} style={{ fontSize: '9px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
           ))}
         </div>
         {lines.map((line, i) => (
-          <div key={line.id} style={{ display: 'grid', gridTemplateColumns: '2fr 40px 80px 80px 170px', padding: '6px 12px', borderBottom: i < lines.length - 1 ? `1px solid ${LIGHT}` : 'none', alignItems: 'center' }}>
-            <div style={{ fontSize: '11px', color: DARK, paddingRight: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={line.description}>{line.description}</div>
-            <div style={{ fontSize: '11px', color: DARK }}>{line.quantity}</div>
-            <div style={{ fontSize: '11px', color: DARK }}>{fmt(line.unit_price)}</div>
-            <div style={{ fontSize: '11px', fontWeight: '500', color: DARK }}>{fmt(line.line_total)}</div>
-            <select value={line.gl_code_id ?? line.gl_codes?.id ?? ''} onChange={e => updateLine(i, 'gl_code_id', e.target.value)}
-              style={{ padding: '3px 5px', fontSize: '10px', border: `1px solid ${BORDER}`, borderRadius: '4px', backgroundColor: WHITE, color: DARK, width: '100%' }}>
-              <option value="">— GL —</option>
-              {glCodes.map(g => <option key={g.id} value={g.id}>{g.xero_account_code} · {g.name}</option>)}
-            </select>
+          <div key={line.id} style={{ display: 'grid', gridTemplateColumns: '2fr 36px 76px 76px 160px', padding: '5px 10px', borderBottom: i < lines.length - 1 ? `1px solid ${LIGHT}` : 'none', alignItems: 'center' }}>
+            <div style={{ fontSize: '10px', color: DARK, paddingRight: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={line.description}>{line.description}</div>
+            <div style={{ fontSize: '10px', color: DARK }}>{line.quantity}</div>
+            <div style={{ fontSize: '10px', color: DARK }}>{fmt(line.unit_price)}</div>
+            <div style={{ fontSize: '10px', fontWeight: '500', color: DARK }}>{fmt(line.line_total)}</div>
+            <div style={{ fontSize: '10px', color: line.gl_codes?.name ? OLIVE : MUTED }}>{line.gl_codes ? `${line.gl_codes.xero_account_code} · ${line.gl_codes.name}` : '— No GL —'}</div>
           </div>
         ))}
-        <div style={{ padding: '5px 12px', borderTop: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'flex-end', gap: '16px', backgroundColor: LIGHT }}>
-          <span style={{ fontSize: '10px', color: MUTED }}>Excl: {fmt(selected.amount_excl)}</span>
-          <span style={{ fontSize: '10px', color: MUTED }}>VAT: {fmt(selected.amount_vat)}</span>
-          <span style={{ fontSize: '11px', fontWeight: '700', color: DARK }}>Total: {fmt(selected.amount_incl)}</span>
+        <div style={{ padding: '4px 10px', borderTop: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'flex-end', gap: '14px', backgroundColor: LIGHT }}>
+          <span style={{ fontSize: '9px', color: MUTED }}>Excl: {fmt(selected.amount_excl)}</span>
+          <span style={{ fontSize: '9px', color: MUTED }}>VAT: {fmt(selected.amount_vat)}</span>
+          <span style={{ fontSize: '10px', fontWeight: '700', color: DARK }}>Total: {fmt(selected.amount_incl)}</span>
         </div>
       </div>
 
       {/* Notes */}
-      <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, padding: '8px 12px', flexShrink: 0 }}>
-        <label style={{ display: 'block', fontSize: '9px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
+      <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, padding: '7px 10px', flexShrink: 0 }}>
+        <label style={{ display: 'block', fontSize: '9px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '3px' }}>
           Notes <span style={{ color: '#EF4444' }}>*required for Return or Reject</span>
         </label>
-        <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Add approval note, return reason, or rejection reason..." rows={2}
-          style={{ width: '100%', padding: '6px 8px', fontSize: '12px', border: `1.5px solid ${BORDER}`, borderRadius: '6px', resize: 'none', boxSizing: 'border-box', color: DARK, fontFamily: 'Arial, sans-serif' }} />
+        <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Approval note, return reason, or rejection reason..." rows={2}
+          style={{ width: '100%', padding: '5px 7px', fontSize: '12px', border: `1.5px solid ${BORDER}`, borderRadius: '6px', resize: 'none', boxSizing: 'border-box', color: DARK, fontFamily: 'Arial, sans-serif' }} />
       </div>
 
-      {/* Audit trail — collapsible */}
+      {/* Audit trail — collapsible, collapsed by default */}
       <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, overflow: 'hidden', flexShrink: 0 }}>
         <button onClick={() => setShowAudit(!showAudit)}
-          style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: LIGHT }}>
-          <span style={{ fontSize: '10px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Audit Trail ({auditTrail.length})</span>
-          <span style={{ fontSize: '12px', color: MUTED, transform: showAudit ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>⌄</span>
+          style={{ width: '100%', padding: '7px 10px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: LIGHT }}>
+          <span style={{ fontSize: '9px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Audit Trail ({auditTrail.length})</span>
+          <span style={{ fontSize: '11px', color: MUTED, transform: showAudit ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>⌄</span>
         </button>
         {showAudit && auditTrail.map((entry, i) => (
-          <div key={entry.id} style={{ padding: '8px 12px', borderTop: `1px solid ${LIGHT}`, display: 'flex', gap: '8px' }}>
-            <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: AMBER, flexShrink: 0, marginTop: '4px' }} />
+          <div key={entry.id} style={{ padding: '6px 10px', borderTop: `1px solid ${LIGHT}`, display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+            <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: AMBER, flexShrink: 0, marginTop: '5px' }} />
             <div>
-              <div style={{ fontSize: '11px', fontWeight: '600', color: DARK }}>{entry.from_status ? `${entry.from_status} → ${entry.to_status}` : entry.to_status}</div>
-              <div style={{ fontSize: '10px', color: MUTED }}>{entry.actor_email} · {fmtDT(entry.created_at)}</div>
-              {entry.notes && <div style={{ fontSize: '11px', color: DARK, marginTop: '2px', fontStyle: 'italic' }}>{entry.notes}</div>}
+              <span style={{ fontSize: '10px', fontWeight: '600', color: DARK }}>{entry.from_status ? `${entry.from_status} → ${entry.to_status}` : entry.to_status}</span>
+              <span style={{ fontSize: '9px', color: MUTED, marginLeft: '6px' }}>{entry.actor_email?.split('@')[0]} · {fmtDT(entry.created_at)}</span>
+              {entry.notes && <div style={{ fontSize: '10px', color: DARK, fontStyle: 'italic', marginTop: '1px' }}>{entry.notes}</div>}
             </div>
           </div>
         ))}
