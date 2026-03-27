@@ -19,7 +19,21 @@ function getSupabase() {
   )
 }
 
-const EXTRACTION_PROMPT = `You are an accounts payable assistant. Extract structured data from this invoice PDF.
+async function buildExtractionPrompt(supabase: any): Promise<string> {
+  // Load real GL codes from DB
+  const { data: glCodes } = await supabase
+    .from('gl_codes')
+    .select('xero_account_code, name, account_type')
+    .eq('is_active', true)
+    .in('account_type', ['EXPENSE', 'DIRECTCOSTS', 'OVERHEADS', 'CURRLIAB', 'FIXED'])
+    .order('xero_account_code')
+
+  const glList = (glCodes ?? [])
+    .filter((g: any) => g.xero_account_code && g.name)
+    .map((g: any) => `- ${g.xero_account_code}: ${g.name}`)
+    .join('\n')
+
+  return `You are an accounts payable assistant for SDC SHEQ Compliance, a South African health and safety consulting company. Extract structured data from this invoice PDF.
 
 Return ONLY a valid JSON object with this exact structure — no markdown, no explanation:
 
@@ -56,28 +70,15 @@ Return ONLY a valid JSON object with this exact structure — no markdown, no ex
   "overall_confidence": 0.0-1.0
 }
 
-For suggested_gl_code and suggested_gl_name, use these South African chart of accounts codes:
-- 400: Advertising & Marketing
-- 404: Bank Fees
-- 408: Cleaning
-- 412: Consulting & Accounting
-- 416: Depreciation
-- 420: Entertainment
-- 424: Freight & Courier
-- 425: General Expenses
-- 429: IT & Software
-- 433: Janitorial
-- 437: Legal Expenses
-- 441: Meals & Accommodation
-- 445: Motor Vehicle Expenses
-- 449: Office Expenses
-- 453: Printing & Stationery
-- 457: Repairs & Maintenance
-- 461: Staff Training
-- 465: Subscriptions
-- 469: Telephone & Internet
-- 473: Travel
-- 477: Utilities
+For suggested_gl_code and suggested_gl_name, use ONLY codes from this list (SDC SHEQ's actual Xero chart of accounts):
+${glList}
+
+Choose the most appropriate expense GL code based on the line item description. If unsure, leave as null.`
+}
+
+const EXTRACTION_PROMPT_FALLBACK = `You are an accounts payable assistant. Extract structured data from this invoice PDF.
+Return ONLY a valid JSON object — no markdown, no explanation.
+Use suggested_gl_code null if you cannot determine the GL code.`
 - 800: Cost of Goods Sold
 - 810: Labour
 
@@ -155,7 +156,7 @@ export async function extractInvoice(invoiceId: string): Promise<void> {
             },
             {
               type: 'text',
-              text: EXTRACTION_PROMPT,
+              text: await buildExtractionPrompt(supabase),
             },
           ],
         },
