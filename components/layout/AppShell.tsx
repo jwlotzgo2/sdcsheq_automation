@@ -7,7 +7,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import TourOverlay from '@/components/TourOverlay'
 import { useTour } from '@/components/TourOverlay'
 import InvoiceChat from '@/components/InvoiceChat'
-import ChatPanel from '@/components/ChatPanel'
+
 
 const AMBER  = '#E8960C'
 const DARK   = '#2A2A2A'
@@ -175,7 +175,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <main style={{ flex: 1, padding: '28px 24px', backgroundColor: LIGHT }}>{children}</main>
         <TourOverlay />
         <InvoiceChat />
-        <ChatPanel />
+
         </div>
       </div>
     )
@@ -198,7 +198,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Page content */}
       <TourOverlay />
-      <ChatPanel />
+      <InvoiceChat />
+
       <main style={{ flex: 1, padding: '16px', paddingBottom: '80px', overflowY: 'auto' }}>
         {children}
       </main>
