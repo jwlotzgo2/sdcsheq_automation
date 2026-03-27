@@ -16,18 +16,17 @@ const fmt = (val: any) =>
   val != null ? `R ${Number(val).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}` : '—'
 const fmtDate = (val: any) =>
   val ? new Date(val).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
-const fmtDateTime = (val: any) =>
+const fmtDT = (val: any) =>
   val ? new Date(val).toLocaleString('en-ZA', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'
 
 function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(false)
+  const [v, setV] = useState(false)
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768)
-    check()
-    window.addEventListener('resize', check)
+    const check = () => setV(window.innerWidth < 768)
+    check(); window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])
-  return isMobile
+  return v
 }
 
 export default function ApprovePage() {
@@ -42,6 +41,7 @@ export default function ApprovePage() {
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [mobileView, setMobileView]       = useState<'list' | 'detail'>('list')
   const [showPdf, setShowPdf]             = useState(false)
+  const [showAudit, setShowAudit]         = useState(false)
   const isMobile = useIsMobile()
 
   const supabase = createBrowserClient(
@@ -64,9 +64,7 @@ export default function ApprovePage() {
   }
 
   const selectInvoice = async (id: string) => {
-    setLoadingDetail(true)
-    setPdfUrl(null)
-    setNotes('')
+    setLoadingDetail(true); setPdfUrl(null); setNotes('')
     if (isMobile) setMobileView('detail')
 
     const [{ data: inv }, { data: lineData }, { data: audit }] = await Promise.all([
@@ -75,6 +73,7 @@ export default function ApprovePage() {
       supabase.from('audit_trail').select('*').eq('invoice_id', id).order('created_at'),
     ])
     setSelected(inv); setLines(lineData ?? []); setAuditTrail(audit ?? [])
+
     if (inv?.storage_path) {
       const path = inv.storage_path.replace('invoices/', '')
       const { data: urlData } = await supabase.storage.from('invoices').createSignedUrl(path, 3600)
@@ -89,16 +88,26 @@ export default function ApprovePage() {
 
   const handleAction = async (actionType: 'approve' | 'return' | 'reject') => {
     if (!selected) return
-    if ((actionType === 'return' || actionType === 'reject') && !notes) { alert(`Please add a ${actionType === 'return' ? 'return reason' : 'rejection reason'}.`); return }
+    if ((actionType === 'return' || actionType === 'reject') && !notes) {
+      alert(`Please add a ${actionType === 'return' ? 'return reason' : 'rejection reason'}.`); return
+    }
     setSubmitting(true)
     const user = (await supabase.auth.getUser()).data.user
     const statusMap = { approve: 'APPROVED', return: 'RETURNED', reject: 'REJECTED' }
     const newStatus = statusMap[actionType]
+
     for (const line of lines) {
       await supabase.from('invoice_line_items').update({ gl_code_id: line.gl_code_id ?? line.gl_codes?.id }).eq('id', line.id)
     }
-    await supabase.from('invoices').update({ status: newStatus, ...(actionType === 'reject' ? { rejection_reason: notes } : {}) }).eq('id', selected.id)
-    await supabase.from('audit_trail').insert({ invoice_id: selected.id, from_status: 'PENDING_APPROVAL', to_status: newStatus, actor_email: user?.email, notes: notes || (actionType === 'approve' ? 'Approved' : '') })
+    await supabase.from('invoices').update({
+      status: newStatus,
+      ...(actionType === 'reject' ? { rejection_reason: notes } : {}),
+    }).eq('id', selected.id)
+    await supabase.from('audit_trail').insert({
+      invoice_id: selected.id, from_status: 'PENDING_APPROVAL', to_status: newStatus,
+      actor_email: user?.email, notes: notes || (actionType === 'approve' ? 'Approved' : ''),
+    })
+
     const remaining = invoices.filter(i => i.id !== selected.id)
     setInvoices(remaining); setSubmitting(false); setNotes('')
     if (isMobile) setMobileView('list')
@@ -106,8 +115,104 @@ export default function ApprovePage() {
     else { setSelected(null); setLines([]) }
   }
 
-  const reviewerNote = auditTrail.find(e => e.to_status === 'PENDING_APPROVAL')
+  // Find reviewer note — the submission to PENDING_APPROVAL
+  const reviewerNote = auditTrail
+    .filter(e => e.to_status === 'PENDING_APPROVAL' && e.actor_email !== 'system')
+    .slice(-1)[0]
 
+  // Also check invoice notes field
+  const invoiceNote = selected?.notes && selected.notes !== `Subject: ${selected?.postmark_message_id}` ? selected.notes : null
+
+  const DetailContent = () => (
+    <>
+      {/* Compact header */}
+      <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, padding: '10px 14px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+          <div>
+            <span style={{ fontSize: '14px', fontWeight: 'bold', color: DARK }}>{selected.supplier_name ?? 'Unknown'}</span>
+            <span style={{ fontSize: '11px', color: MUTED, marginLeft: '8px' }}>{selected.invoice_number}</span>
+          </div>
+          <span style={{ fontSize: '15px', fontWeight: '700', color: DARK }}>{fmt(selected.amount_incl)}</span>
+        </div>
+        <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
+          {[{ label: 'Date', value: fmtDate(selected.invoice_date) }, { label: 'Due', value: fmtDate(selected.due_date) }, { label: 'Excl', value: fmt(selected.amount_excl) }, { label: 'VAT', value: fmt(selected.amount_vat) }].map(({ label, value }) => (
+            <div key={label} style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+              <span style={{ fontSize: '10px', color: MUTED, fontWeight: '600', textTransform: 'uppercase' }}>{label}:</span>
+              <span style={{ fontSize: '11px', fontWeight: '600', color: DARK }}>{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Reviewer note — show even if just "Submitted for approval" if there's an invoice note */}
+      {(reviewerNote || invoiceNote) && (
+        <div style={{ backgroundColor: '#FEF3C7', borderRadius: '8px', border: `1px solid #FDE68A`, padding: '10px 14px', flexShrink: 0 }}>
+          <div style={{ fontSize: '10px', fontWeight: '700', color: AMBER, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
+            📋 Reviewer Note
+          </div>
+          <div style={{ fontSize: '13px', color: DARK }}>{reviewerNote?.notes && reviewerNote.notes !== 'Submitted for approval' ? reviewerNote.notes : invoiceNote ?? '(No specific note added — invoice submitted for approval)'}</div>
+          {reviewerNote && <div style={{ fontSize: '10px', color: MUTED, marginTop: '3px' }}>{reviewerNote.actor_email} · {fmtDT(reviewerNote.created_at)}</div>}
+        </div>
+      )}
+
+      {/* Line items */}
+      <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, overflow: 'hidden', flexShrink: 0 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 40px 80px 80px 170px', padding: '6px 12px', backgroundColor: LIGHT, borderBottom: `1px solid ${BORDER}` }}>
+          {['Description', 'Qty', 'Unit', 'Total', 'GL Code'].map(h => (
+            <div key={h} style={{ fontSize: '9px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
+          ))}
+        </div>
+        {lines.map((line, i) => (
+          <div key={line.id} style={{ display: 'grid', gridTemplateColumns: '2fr 40px 80px 80px 170px', padding: '6px 12px', borderBottom: i < lines.length - 1 ? `1px solid ${LIGHT}` : 'none', alignItems: 'center' }}>
+            <div style={{ fontSize: '11px', color: DARK, paddingRight: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={line.description}>{line.description}</div>
+            <div style={{ fontSize: '11px', color: DARK }}>{line.quantity}</div>
+            <div style={{ fontSize: '11px', color: DARK }}>{fmt(line.unit_price)}</div>
+            <div style={{ fontSize: '11px', fontWeight: '500', color: DARK }}>{fmt(line.line_total)}</div>
+            <select value={line.gl_code_id ?? line.gl_codes?.id ?? ''} onChange={e => updateLine(i, 'gl_code_id', e.target.value)}
+              style={{ padding: '3px 5px', fontSize: '10px', border: `1px solid ${BORDER}`, borderRadius: '4px', backgroundColor: WHITE, color: DARK, width: '100%' }}>
+              <option value="">— GL —</option>
+              {glCodes.map(g => <option key={g.id} value={g.id}>{g.xero_account_code} · {g.name}</option>)}
+            </select>
+          </div>
+        ))}
+        <div style={{ padding: '5px 12px', borderTop: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'flex-end', gap: '16px', backgroundColor: LIGHT }}>
+          <span style={{ fontSize: '10px', color: MUTED }}>Excl: {fmt(selected.amount_excl)}</span>
+          <span style={{ fontSize: '10px', color: MUTED }}>VAT: {fmt(selected.amount_vat)}</span>
+          <span style={{ fontSize: '11px', fontWeight: '700', color: DARK }}>Total: {fmt(selected.amount_incl)}</span>
+        </div>
+      </div>
+
+      {/* Notes */}
+      <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, padding: '8px 12px', flexShrink: 0 }}>
+        <label style={{ display: 'block', fontSize: '9px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
+          Notes <span style={{ color: '#EF4444' }}>*required for Return or Reject</span>
+        </label>
+        <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Add approval note, return reason, or rejection reason..." rows={2}
+          style={{ width: '100%', padding: '6px 8px', fontSize: '12px', border: `1.5px solid ${BORDER}`, borderRadius: '6px', resize: 'none', boxSizing: 'border-box', color: DARK, fontFamily: 'Arial, sans-serif' }} />
+      </div>
+
+      {/* Audit trail — collapsible */}
+      <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, overflow: 'hidden', flexShrink: 0 }}>
+        <button onClick={() => setShowAudit(!showAudit)}
+          style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: LIGHT }}>
+          <span style={{ fontSize: '10px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Audit Trail ({auditTrail.length})</span>
+          <span style={{ fontSize: '12px', color: MUTED, transform: showAudit ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>⌄</span>
+        </button>
+        {showAudit && auditTrail.map((entry, i) => (
+          <div key={entry.id} style={{ padding: '8px 12px', borderTop: `1px solid ${LIGHT}`, display: 'flex', gap: '8px' }}>
+            <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: AMBER, flexShrink: 0, marginTop: '4px' }} />
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: '600', color: DARK }}>{entry.from_status ? `${entry.from_status} → ${entry.to_status}` : entry.to_status}</div>
+              <div style={{ fontSize: '10px', color: MUTED }}>{entry.actor_email} · {fmtDT(entry.created_at)}</div>
+              {entry.notes && <div style={{ fontSize: '11px', color: DARK, marginTop: '2px', fontStyle: 'italic' }}>{entry.notes}</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  )
+
+  // ── MOBILE ──────────────────────────────────────────────────────
   if (isMobile) {
     return (
       <AppShell>
@@ -148,67 +253,19 @@ export default function ApprovePage() {
 
         {mobileView === 'detail' && selected && (
           <div style={{ paddingBottom: '100px' }}>
-            <button onClick={() => setMobileView('list')} style={{ background: 'none', border: 'none', color: AMBER, fontSize: '14px', fontWeight: '600', cursor: 'pointer', padding: '0 0 16px', display: 'flex', alignItems: 'center', gap: '4px' }}>‹ All Invoices</button>
+            <button onClick={() => setMobileView('list')} style={{ background: 'none', border: 'none', color: AMBER, fontSize: '14px', fontWeight: '600', cursor: 'pointer', padding: '0 0 16px' }}>‹ All Invoices</button>
             {loadingDetail ? (
               <div style={{ textAlign: 'center', padding: '40px', color: MUTED }}>Loading...</div>
             ) : (
-              <>
-                <div style={{ backgroundColor: WHITE, borderRadius: '10px', border: `1px solid ${BORDER}`, padding: '16px', marginBottom: '12px' }}>
-                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: DARK, marginBottom: '4px' }}>{selected.supplier_name ?? 'Unknown'}</div>
-                  <div style={{ fontSize: '12px', color: MUTED, marginBottom: '12px' }}>{selected.invoice_number}</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    {[{ label: 'Date', value: fmtDate(selected.invoice_date) }, { label: 'Due', value: fmtDate(selected.due_date) }, { label: 'Excl. VAT', value: fmt(selected.amount_excl) }, { label: 'Total', value: fmt(selected.amount_incl) }].map(({ label, value }) => (
-                      <div key={label}>
-                        <div style={{ fontSize: '10px', color: MUTED, fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' }}>{label}</div>
-                        <div style={{ fontSize: '14px', fontWeight: '600', color: DARK }}>{value}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {reviewerNote?.notes && (
-                  <div style={{ backgroundColor: '#FEF3C7', borderRadius: '10px', border: `1px solid #FDE68A`, padding: '12px 16px', marginBottom: '12px' }}>
-                    <div style={{ fontSize: '10px', fontWeight: '700', color: AMBER, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Reviewer Note</div>
-                    <div style={{ fontSize: '13px', color: DARK }}>{reviewerNote.notes}</div>
-                    <div style={{ fontSize: '11px', color: MUTED, marginTop: '4px' }}>{reviewerNote.actor_email}</div>
-                  </div>
-                )}
-
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <DetailContent />
                 {pdfUrl && (
-                  <button onClick={() => setShowPdf(true)} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: `1.5px solid ${BORDER}`, backgroundColor: WHITE, color: DARK, fontSize: '14px', fontWeight: '600', cursor: 'pointer', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                  <button onClick={() => setShowPdf(true)} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: `1.5px solid ${BORDER}`, backgroundColor: WHITE, color: DARK, fontSize: '14px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                     📄 View Invoice PDF
                   </button>
                 )}
-
-                <div style={{ backgroundColor: WHITE, borderRadius: '10px', border: `1px solid ${BORDER}`, overflow: 'hidden', marginBottom: '12px' }}>
-                  <div style={{ padding: '12px 16px', borderBottom: `1px solid ${BORDER}`, fontSize: '11px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Line Items</div>
-                  {lines.map((line, i) => (
-                    <div key={line.id} style={{ padding: '12px 16px', borderBottom: i < lines.length - 1 ? `1px solid ${LIGHT}` : 'none' }}>
-                      <div style={{ fontSize: '13px', color: DARK, marginBottom: '6px' }}>{line.description}</div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                        <span style={{ fontSize: '12px', color: MUTED }}>Qty {line.quantity} × {fmt(line.unit_price)}</span>
-                        <span style={{ fontSize: '13px', fontWeight: '600', color: DARK }}>{fmt(line.line_total)}</span>
-                      </div>
-                      <select value={line.gl_code_id ?? line.gl_codes?.id ?? ''} onChange={e => updateLine(i, 'gl_code_id', e.target.value)} style={{ width: '100%', padding: '8px', fontSize: '13px', border: `1px solid ${BORDER}`, borderRadius: '6px', backgroundColor: WHITE, color: DARK }}>
-                        <option value="">— GL code —</option>
-                        {glCodes.map(g => <option key={g.id} value={g.id}>{g.xero_account_code} · {g.name}</option>)}
-                      </select>
-                    </div>
-                  ))}
-                  <div style={{ padding: '10px 16px', backgroundColor: LIGHT, display: 'flex', justifyContent: 'flex-end', gap: '16px' }}>
-                    <span style={{ fontSize: '12px', color: MUTED }}>VAT: {fmt(selected.amount_vat)}</span>
-                    <span style={{ fontSize: '13px', fontWeight: '700', color: DARK }}>Total: {fmt(selected.amount_incl)}</span>
-                  </div>
-                </div>
-
-                <div style={{ backgroundColor: WHITE, borderRadius: '10px', border: `1px solid ${BORDER}`, padding: '14px 16px', marginBottom: '12px' }}>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Notes <span style={{ color: '#EF4444' }}>*required for Return or Reject</span></label>
-                  <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Add note, return reason, or rejection reason..." rows={3}
-                    style={{ width: '100%', padding: '10px', fontSize: '14px', border: `1.5px solid ${BORDER}`, borderRadius: '8px', resize: 'none', boxSizing: 'border-box', color: DARK, fontFamily: 'Arial, sans-serif' }} />
-                </div>
-              </>
+              </div>
             )}
-
             <div style={{ position: 'fixed', bottom: '60px', left: 0, right: 0, padding: '10px 16px', backgroundColor: WHITE, borderTop: `1px solid ${BORDER}`, display: 'flex', gap: '8px', zIndex: 50 }}>
               <button onClick={() => handleAction('reject')} disabled={submitting} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '2px solid #EF4444', backgroundColor: WHITE, color: '#EF4444', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>Reject</button>
               <button onClick={() => handleAction('return')} disabled={submitting} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: `2px solid ${AMBER}`, backgroundColor: WHITE, color: AMBER, fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>Return</button>
@@ -220,108 +277,76 @@ export default function ApprovePage() {
     )
   }
 
-  // DESKTOP
+  // ── DESKTOP ──────────────────────────────────────────────────────
   return (
     <AppShell>
+      {showPdf && pdfUrl && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, backgroundColor: DARK, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', backgroundColor: DARK, flexShrink: 0 }}>
+            <span style={{ color: WHITE, fontWeight: '600', fontSize: '14px' }}>{selected?.supplier_name} — {selected?.invoice_number}</span>
+            <button onClick={() => setShowPdf(false)} style={{ background: 'none', border: 'none', color: WHITE, fontSize: '24px', cursor: 'pointer' }}>×</button>
+          </div>
+          <iframe src={pdfUrl} style={{ flex: 1, border: 'none', width: '100%' }} title="Invoice PDF" />
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 112px)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexShrink: 0 }}>
           <div>
             <h1 style={{ fontSize: '18px', fontWeight: 'bold', color: DARK, margin: '0 0 2px' }}>Approval Queue</h1>
             <p style={{ fontSize: '12px', color: MUTED, margin: 0 }}>{invoices.length} invoice{invoices.length !== 1 ? 's' : ''} awaiting approval</p>
           </div>
           {selected && (
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => handleAction('reject')} disabled={submitting} style={{ padding: '8px 16px', borderRadius: '7px', border: '1.5px solid #EF4444', backgroundColor: WHITE, color: '#EF4444', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Reject</button>
-              <button onClick={() => handleAction('return')} disabled={submitting} style={{ padding: '8px 16px', borderRadius: '7px', border: `1.5px solid ${AMBER}`, backgroundColor: WHITE, color: AMBER, fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Return to Reviewer</button>
-              <button onClick={() => handleAction('approve')} disabled={submitting} style={{ padding: '8px 20px', borderRadius: '7px', border: 'none', backgroundColor: OLIVE, color: WHITE, fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>{submitting ? 'Processing...' : '✓ Approve'}</button>
+              <button onClick={() => handleAction('reject')} disabled={submitting} style={{ padding: '7px 14px', borderRadius: '7px', border: '1.5px solid #EF4444', backgroundColor: WHITE, color: '#EF4444', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Reject</button>
+              <button onClick={() => handleAction('return')} disabled={submitting} style={{ padding: '7px 14px', borderRadius: '7px', border: `1.5px solid ${AMBER}`, backgroundColor: WHITE, color: AMBER, fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Return to Reviewer</button>
+              <button onClick={() => handleAction('approve')} disabled={submitting} style={{ padding: '7px 20px', borderRadius: '7px', border: 'none', backgroundColor: OLIVE, color: WHITE, fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>{submitting ? 'Processing...' : '✓ Approve'}</button>
             </div>
           )}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr 480px', gap: '12px', flex: 1, minHeight: 0 }}>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 1fr', gap: '10px', flex: 1, minHeight: 0 }}>
+          {/* COL 1 */}
           <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '10px 14px', borderBottom: `1px solid ${BORDER}`, fontSize: '11px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pending Approval</div>
+            <div style={{ padding: '8px 12px', borderBottom: `1px solid ${BORDER}`, fontSize: '10px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pending Approval</div>
             <div style={{ overflowY: 'auto', flex: 1 }}>
-              {invoices.length === 0 ? <div style={{ padding: '32px 14px', textAlign: 'center', color: MUTED, fontSize: '12px' }}>No invoices pending approval</div> :
+              {invoices.length === 0 ? <div style={{ padding: '24px 12px', textAlign: 'center', color: MUTED, fontSize: '12px' }}>No invoices pending approval</div> :
                 invoices.map(inv => (
-                  <div key={inv.id} onClick={() => selectInvoice(inv.id)} style={{ padding: '12px 14px', borderBottom: `1px solid ${LIGHT}`, cursor: 'pointer', backgroundColor: selected?.id === inv.id ? '#F0FDF4' : WHITE, borderLeft: selected?.id === inv.id ? `3px solid ${OLIVE}` : '3px solid transparent' }}>
-                    <div style={{ fontSize: '13px', fontWeight: '600', color: DARK, marginBottom: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{inv.supplier_name ?? 'Unknown'}</div>
-                    <div style={{ fontSize: '11px', color: MUTED, marginBottom: '4px' }}>{inv.invoice_number ?? '—'}</div>
+                  <div key={inv.id} onClick={() => selectInvoice(inv.id)} style={{ padding: '10px 12px', borderBottom: `1px solid ${LIGHT}`, cursor: 'pointer', backgroundColor: selected?.id === inv.id ? '#F0FDF4' : WHITE, borderLeft: selected?.id === inv.id ? `3px solid ${OLIVE}` : '3px solid transparent' }}>
+                    <div style={{ fontSize: '12px', fontWeight: '600', color: DARK, marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{inv.supplier_name ?? 'Unknown'}</div>
+                    <div style={{ fontSize: '10px', color: MUTED, marginBottom: '3px' }}>{inv.invoice_number ?? '—'}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: '11px', color: MUTED }}>{fmtDate(inv.invoice_date)}</span>
-                      <span style={{ fontSize: '12px', fontWeight: '700', color: DARK }}>{fmt(inv.amount_incl)}</span>
+                      <span style={{ fontSize: '10px', color: MUTED }}>{fmtDate(inv.invoice_date)}</span>
+                      <span style={{ fontSize: '11px', fontWeight: '700', color: DARK }}>{fmt(inv.amount_incl)}</span>
                     </div>
                   </div>
                 ))}
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto', minHeight: 0 }}>
-            {!selected ? <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MUTED, fontSize: '13px' }}>Select an invoice to approve</div> :
-              loadingDetail ? <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MUTED, fontSize: '13px' }}>Loading...</div> : (
-                <>
-                  <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, padding: '14px 16px', flexShrink: 0 }}>
-                    <div style={{ fontSize: '15px', fontWeight: 'bold', color: DARK, marginBottom: '10px' }}>{selected.supplier_name ?? 'Unknown'}<span style={{ fontSize: '12px', color: MUTED, fontWeight: '400', marginLeft: '8px' }}>{selected.invoice_number}</span></div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '10px' }}>
-                      {[{ label: 'Date', value: fmtDate(selected.invoice_date) }, { label: 'Due', value: fmtDate(selected.due_date) }, { label: 'Excl. VAT', value: fmt(selected.amount_excl) }, { label: 'Total', value: fmt(selected.amount_incl) }].map(({ label, value }) => (
-                        <div key={label}><div style={{ fontSize: '10px', color: MUTED, fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' }}>{label}</div><div style={{ fontSize: '13px', fontWeight: '600', color: DARK }}>{value}</div></div>
-                      ))}
-                    </div>
-                  </div>
-                  {reviewerNote?.notes && (
-                    <div style={{ backgroundColor: '#FEF3C7', borderRadius: '8px', border: `1px solid #FDE68A`, padding: '12px 14px', flexShrink: 0 }}>
-                      <div style={{ fontSize: '10px', fontWeight: '600', color: AMBER, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Reviewer Note</div>
-                      <div style={{ fontSize: '13px', color: DARK }}>{reviewerNote.notes}</div>
-                      <div style={{ fontSize: '11px', color: MUTED, marginTop: '4px' }}>{reviewerNote.actor_email} · {fmtDateTime(reviewerNote.created_at)}</div>
-                    </div>
-                  )}
-                  <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, overflow: 'hidden', flexShrink: 0 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 50px 90px 90px 190px', padding: '8px 14px', backgroundColor: LIGHT, borderBottom: `1px solid ${BORDER}` }}>
-                      {['Description', 'Qty', 'Unit Price', 'Total', 'GL Code'].map(h => <div key={h} style={{ fontSize: '10px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>)}
-                    </div>
-                    {lines.map((line, i) => (
-                      <div key={line.id} style={{ display: 'grid', gridTemplateColumns: '2fr 50px 90px 90px 190px', padding: '9px 14px', borderBottom: i < lines.length - 1 ? `1px solid ${LIGHT}` : 'none', alignItems: 'center' }}>
-                        <div style={{ fontSize: '12px', color: DARK, paddingRight: '10px' }}>{line.description}</div>
-                        <div style={{ fontSize: '12px', color: DARK }}>{line.quantity}</div>
-                        <div style={{ fontSize: '12px', color: DARK }}>{fmt(line.unit_price)}</div>
-                        <div style={{ fontSize: '12px', fontWeight: '500', color: DARK }}>{fmt(line.line_total)}</div>
-                        <select value={line.gl_code_id ?? line.gl_codes?.id ?? ''} onChange={e => updateLine(i, 'gl_code_id', e.target.value)} style={{ padding: '4px 6px', fontSize: '11px', border: `1px solid ${BORDER}`, borderRadius: '5px', backgroundColor: WHITE, color: DARK, width: '100%' }}>
-                          <option value="">— GL code —</option>
-                          {glCodes.map(g => <option key={g.id} value={g.id}>{g.xero_account_code} · {g.name}</option>)}
-                        </select>
-                      </div>
-                    ))}
-                    <div style={{ padding: '8px 14px', borderTop: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'flex-end', gap: '20px', backgroundColor: LIGHT }}>
-                      <span style={{ fontSize: '11px', color: MUTED }}>Excl: {fmt(selected.amount_excl)}</span>
-                      <span style={{ fontSize: '11px', color: MUTED }}>VAT: {fmt(selected.amount_vat)}</span>
-                      <span style={{ fontSize: '12px', fontWeight: '700', color: DARK }}>Total: {fmt(selected.amount_incl)}</span>
-                    </div>
-                  </div>
-                  <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, padding: '12px 14px', flexShrink: 0 }}>
-                    <label style={{ display: 'block', fontSize: '10px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Notes <span style={{ color: '#EF4444' }}>*required for Return or Reject</span></label>
-                    <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Add approval note, return reason, or rejection reason..." rows={2}
-                      style={{ width: '100%', padding: '8px 10px', fontSize: '12px', border: `1.5px solid ${BORDER}`, borderRadius: '6px', resize: 'none', boxSizing: 'border-box', color: DARK, fontFamily: 'Arial, sans-serif' }} />
-                  </div>
-                  <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, overflow: 'hidden', flexShrink: 0 }}>
-                    <div style={{ padding: '10px 14px', borderBottom: `1px solid ${BORDER}`, fontSize: '11px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Audit Trail</div>
-                    {auditTrail.map((entry, i) => (
-                      <div key={entry.id} style={{ padding: '10px 14px', borderBottom: i < auditTrail.length - 1 ? `1px solid ${LIGHT}` : 'none', display: 'flex', gap: '10px' }}>
-                        <div style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: AMBER, flexShrink: 0, marginTop: '4px' }} />
-                        <div>
-                          <div style={{ fontSize: '12px', fontWeight: '600', color: DARK, marginBottom: '2px' }}>{entry.from_status ? `${entry.from_status} → ${entry.to_status}` : entry.to_status}</div>
-                          <div style={{ fontSize: '11px', color: MUTED }}>{entry.actor_email} · {fmtDateTime(entry.created_at)}</div>
-                          {entry.notes && <div style={{ fontSize: '11px', color: DARK, marginTop: '3px' }}>{entry.notes}</div>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
+
+          {/* COL 2 — Detail */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', overflowY: 'auto', minHeight: 0 }}>
+            {!selected ? (
+              <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MUTED, fontSize: '13px' }}>Select an invoice to approve</div>
+            ) : loadingDetail ? (
+              <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MUTED, fontSize: '13px' }}>Loading...</div>
+            ) : <DetailContent />}
           </div>
+
+          {/* COL 3 — PDF */}
           <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <div style={{ padding: '10px 14px', borderBottom: `1px solid ${BORDER}`, fontSize: '11px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', flexShrink: 0 }}>Invoice PDF</div>
-            {pdfUrl ? <iframe src={pdfUrl} style={{ flex: 1, border: 'none', width: '100%', height: '100%' }} title="Invoice PDF" /> :
+            <div style={{ padding: '8px 12px', borderBottom: `1px solid ${BORDER}`, fontSize: '10px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Invoice PDF</span>
+              {pdfUrl && <button onClick={() => setShowPdf(true)} style={{ background: 'none', border: `1px solid ${BORDER}`, borderRadius: '4px', padding: '2px 8px', fontSize: '10px', cursor: 'pointer', color: MUTED }}>⛶ Fullscreen</button>}
+            </div>
+            {pdfUrl ? (
+              <iframe src={pdfUrl} style={{ flex: 1, border: 'none', width: '100%', height: '100%' }} title="Invoice PDF" />
+            ) : (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MUTED, fontSize: '13px', flexDirection: 'column', gap: '8px' }}>
-                <div style={{ fontSize: '28px' }}>📄</div><div>{selected ? 'PDF not available' : 'Select an invoice'}</div>
-              </div>}
+                <div style={{ fontSize: '28px' }}>📄</div>
+                <div>{selected ? 'PDF not available' : 'Select an invoice'}</div>
+              </div>
+            )}
           </div>
         </div>
       </div>

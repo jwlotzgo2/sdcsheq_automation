@@ -39,6 +39,7 @@ export default function ReviewPage() {
   const [notes, setNotes]                   = useState('')
   const [submitting, setSubmitting]         = useState(false)
   const [loadingDetail, setLoadingDetail]   = useState(false)
+  const [auditTrail, setAuditTrail]           = useState<any[]>([])
   const [mobileView, setMobileView]         = useState<'list' | 'detail' | 'pdf'>('list')
   const [showPdf, setShowPdf]               = useState(false)
   const [showCreateSupplier, setShowCreateSupplier] = useState(false)
@@ -84,13 +85,15 @@ export default function ReviewPage() {
     setNotes('')
     if (isMobile) setMobileView('detail')
 
-    const [{ data: inv }, { data: lineData }] = await Promise.all([
+    const [{ data: inv }, { data: lineData }, { data: audit }] = await Promise.all([
       supabase.from('invoices').select('*').eq('id', id).single(),
       supabase.from('invoice_line_items').select('*, gl_codes(id, xero_account_code, name)').eq('invoice_id', id).order('sort_order'),
+      supabase.from('audit_trail').select('*').eq('invoice_id', id).order('created_at'),
     ])
 
     setSelected(inv)
     setLines(lineData ?? [])
+    setAuditTrail(audit ?? [])
     setSelectedSupplier(inv?.supplier_id ?? '')
 
     if (inv?.storage_path) {
@@ -426,6 +429,19 @@ export default function ReviewPage() {
                     )}
                   </div>
                 </div>
+
+                {/* Return reason from approver */}
+                {(() => {
+                  const returnNote = auditTrail.find(e => e.to_status === 'RETURNED' && e.notes)
+                  if (!returnNote) return null
+                  return (
+                    <div style={{ backgroundColor: '#FEF3C7', borderRadius: '8px', border: '1px solid #FDE68A', padding: '8px 12px', flexShrink: 0 }}>
+                      <div style={{ fontSize: '9px', fontWeight: '700', color: AMBER, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '3px' }}>Returned by Approver</div>
+                      <div style={{ fontSize: '12px', color: DARK }}>{returnNote.notes}</div>
+                      <div style={{ fontSize: '10px', color: MUTED, marginTop: '2px' }}>{returnNote.actor_email}</div>
+                    </div>
+                  )
+                })()}
 
                 {/* Line items — compact */}
                 <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, overflow: 'hidden', flexShrink: 0 }}>

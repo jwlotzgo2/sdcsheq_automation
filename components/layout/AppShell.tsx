@@ -6,6 +6,8 @@ import { usePathname } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import TourOverlay from '@/components/TourOverlay'
 import { useTour } from '@/components/TourOverlay'
+import InvoiceChat from '@/components/InvoiceChat'
+import ChatPanel from '@/components/ChatPanel'
 
 const AMBER  = '#E8960C'
 const DARK   = '#2A2A2A'
@@ -27,7 +29,9 @@ const MORE_NAV = [
   { href: '/suppliers',       label: 'Suppliers',      icon: '🏢' },
   { href: '/gl-codes',        label: 'GL Codes',       icon: '📒' },
   { href: '/capture',         label: 'Capture',        icon: '📷' },
+  { href: '/xero-push',       label: 'Xero Push',      icon: '⬆' },
   { href: '/help',            label: 'Help',           icon: '❓' },
+  { href: '/xero-push',       label: 'Push to Xero',   icon: '📤' },
   { href: '/admin/users',     label: 'Users',          icon: '👥' },
   { href: '/admin/settings',  label: 'Settings',       icon: '⚙️' },
 ]
@@ -148,6 +152,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <NavItem href="/suppliers"  label="Suppliers"     icon="🏢" />
             <NavItem href="/gl-codes"   label="GL Codes"      icon="📒" />
             <NavItem href="/capture"    label="Capture"       icon="📷" />
+          <NavItem href="/xero-push"  label="Push to Xero"  icon="📤" />
+          <NavItem href="/xero-push"   label="Xero Push"     icon="⬆" />
           <NavItem href="/help"        label="Help"          icon="❓" />
             <div style={{ padding: '12px 12px 6px', color: 'rgba(255,255,255,0.3)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '8px' }}>Admin</div>
             <NavItem href="/admin/users"    label="Users"    icon="👥" />
@@ -168,6 +174,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </header>
           <main style={{ flex: 1, padding: '28px 24px', backgroundColor: LIGHT }}>{children}</main>
         <TourOverlay />
+        <InvoiceChat />
+        <ChatPanel />
         </div>
       </div>
     )
@@ -190,6 +198,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Page content */}
       <TourOverlay />
+      <ChatPanel />
       <main style={{ flex: 1, padding: '16px', paddingBottom: '80px', overflowY: 'auto' }}>
         {children}
       </main>
