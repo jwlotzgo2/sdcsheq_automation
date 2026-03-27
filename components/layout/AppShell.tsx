@@ -251,7 +251,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div style={{ width: '40px', height: '4px', backgroundColor: BORDER, borderRadius: '2px', margin: '0 auto 16px' }} />
 
             <div style={{ padding: '0 8px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
-              {MORE_NAV.map(({ href, label, icon }) => {
+              {[...MORE_NAV, ...(canCapture ? [{ href: '/capture', label: 'Capture', icon: '📷' }] : [])].map(({ href, label, icon }) => {
                 const badge  = getBadge(href)
                 const active = isActive(href)
                 return (
