@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, memo } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
-import SupplierLayout from './layout'
+import SupplierLayout from '@/components/SupplierShell'
 
 const AMBER  = '#E8960C'
 const DARK   = '#2A2A2A'
