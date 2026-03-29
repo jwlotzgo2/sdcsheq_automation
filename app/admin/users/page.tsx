@@ -13,7 +13,7 @@ const MUTED  = '#8A8878'
 const WHITE  = '#FFFFFF'
 const RED    = '#EF4444'
 
-const ROLES = ['AP_CLERK', 'REVIEWER', 'APPROVER', 'FINANCE_MANAGER', 'AP_ADMIN']
+const ROLES = ['AP_CLERK', 'REVIEWER', 'APPROVER', 'FINANCE_MANAGER', 'AP_ADMIN', 'SUPPLIER']
 
 const ROLE_META: Record<string, { color: string; bg: string; label: string; description: string }> = {
   AP_CLERK:        { color: MUTED,     bg: LIGHT,     label: 'AP Clerk',        description: 'Review invoices, assign GL codes' },
@@ -21,6 +21,7 @@ const ROLE_META: Record<string, { color: string; bg: string; label: string; desc
   APPROVER:        { color: OLIVE,     bg: '#F0FDF4', label: 'Approver',        description: 'Approve invoices, push to Xero' },
   FINANCE_MANAGER: { color: AMBER,     bg: '#FEF3C7', label: 'Finance Manager', description: 'Full pipeline visibility' },
   AP_ADMIN:        { color: '#8B5CF6', bg: '#F5F3FF', label: 'Admin',           description: 'Full access including user management' },
+  SUPPLIER:        { color: '#13B5EA', bg: '#EBF9FF', label: 'Supplier',        description: 'Supplier portal access only' },
 }
 
 const initials = (name: string) =>
@@ -75,12 +76,14 @@ const UserCard = memo(function UserCard({ user, isSelected, onSelect }: {
   )
 })
 
-const DetailPanel = memo(function DetailPanel({ user, isAdmin, saving, saveMsg, onRoleChange, onToggleActive, onToggleCapture, onNameSave }: {
+const DetailPanel = memo(function DetailPanel({ user, isAdmin, saving, saveMsg, onRoleChange, onToggleActive, onToggleCapture, onNameSave, onSupplierLink, allSuppliers }: {
   user: any; isAdmin: boolean; saving: boolean; saveMsg: string
   onRoleChange: (userId: string, role: string) => void
   onToggleActive: (userId: string, isActive: boolean) => void
   onToggleCapture: (userId: string, current: boolean) => void
   onNameSave: (userId: string, name: string) => void
+  onSupplierLink: (userId: string, supplierId: string) => void
+  allSuppliers: any[]
 }) {
   const [editName, setEditName] = useState(user?.full_name ?? '')
 
@@ -192,6 +195,19 @@ const DetailPanel = memo(function DetailPanel({ user, isAdmin, saving, saveMsg, 
         </div>
       )}
 
+      {/* Supplier link — only relevant for SUPPLIER role */}
+      {isAdmin && user.role === 'SUPPLIER' && (
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Linked Supplier</label>
+          <select value={user.supplier_id ?? ''} onChange={e => onSupplierLink(user.user_id, e.target.value)}
+            style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1.5px solid ${BORDER}`, borderRadius: '7px', backgroundColor: WHITE, color: DARK }}>
+            <option value="">— Not linked —</option>
+            {allSuppliers.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          <div style={{ fontSize: '11px', color: MUTED, marginTop: '4px' }}>Link this user to a supplier so they can access the supplier portal</div>
+        </div>
+      )}
+
       {saveMsg && <div style={{ fontSize: '12px', color: OLIVE, fontWeight: '600', textAlign: 'center', marginTop: '8px' }}>✓ {saveMsg}</div>}
     </div>
   )
@@ -226,6 +242,7 @@ export default function UsersPage() {
       }
     })
     fetchUsers()
+    supabase.from('suppliers').select('id, name').eq('is_active', true).order('name').then(({ data }) => setAllSuppliers(data ?? []))
   }, [])
 
   const isAdmin = currentRole === 'AP_ADMIN'
@@ -250,6 +267,7 @@ export default function UsersPage() {
       setInviteMsg(`✓ Invite sent to ${inviteEmail}`)
       setInviteEmail(''); setShowInvite(false)
       fetchUsers()
+    supabase.from('suppliers').select('id, name').eq('is_active', true).order('name').then(({ data }) => setAllSuppliers(data ?? []))
     } else {
       setInviteMsg(`Error: ${data.error}`)
     }
@@ -278,6 +296,15 @@ export default function UsersPage() {
     await supabase.from('user_profiles').update({ is_active: !isActive }).eq('user_id', userId)
     setSelected((prev: any) => prev ? { ...prev, is_active: !isActive } : prev)
     setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, is_active: !isActive } : u))
+    setSaving(false)
+  }
+
+  const handleSupplierLink = async (userId: string, supplierId: string) => {
+    setSaving(true)
+    await supabase.from('user_profiles').update({ supplier_id: supplierId || null }).eq('user_id', userId)
+    setSelected((prev: any) => prev ? { ...prev, supplier_id: supplierId || null } : prev)
+    setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, supplier_id: supplierId || null } : u))
+    setSaveMsg('Supplier linked'); setTimeout(() => setSaveMsg(''), 2000)
     setSaving(false)
   }
 
@@ -352,7 +379,7 @@ export default function UsersPage() {
               </div>
               <DetailPanel
                 user={selected} isAdmin={isAdmin} saving={saving} saveMsg={saveMsg}
-                onRoleChange={handleRoleChange} onToggleActive={handleToggleActive} onToggleCapture={handleToggleCapture} onNameSave={handleNameSave}
+                onRoleChange={handleRoleChange} onToggleActive={handleToggleActive} onToggleCapture={handleToggleCapture} onNameSave={handleNameSave} onSupplierLink={handleSupplierLink} allSuppliers={allSuppliers}
               />
             </div>
           )}
@@ -399,7 +426,7 @@ export default function UsersPage() {
             <div style={{ width: '40px', height: '4px', backgroundColor: BORDER, borderRadius: '2px', margin: '12px auto 4px' }} />
             <DetailPanel
               user={selected} isAdmin={isAdmin} saving={saving} saveMsg={saveMsg}
-              onRoleChange={handleRoleChange} onToggleActive={handleToggleActive} onToggleCapture={handleToggleCapture} onNameSave={handleNameSave}
+              onRoleChange={handleRoleChange} onToggleActive={handleToggleActive} onToggleCapture={handleToggleCapture} onNameSave={handleNameSave} onSupplierLink={handleSupplierLink} allSuppliers={allSuppliers}
             />
           </div>
         </div>
