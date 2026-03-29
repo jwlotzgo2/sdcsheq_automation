@@ -37,13 +37,15 @@ export default function XeroPushPage() {
   const [pushing, setPushing]       = useState(false)
   const [done, setDone]             = useState(false)
   const [results, setResults]       = useState<Record<string, { status: PushStatus; error?: string }>>({})
+  const [mounted, setMounted]       = useState(false)
+  const isMobile = useIsMobile()
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  useEffect(() => { fetchInvoices() }, [])
+  useEffect(() => { setMounted(true); fetchInvoices() }, [])
 
   const fetchInvoices = async () => {
     setLoading(true)
@@ -112,6 +114,8 @@ export default function XeroPushPage() {
     if (r.status === 'skipped') return <span style={{ color: MUTED, fontSize: '13px' }}>—</span>
     return null
   }
+
+  if (!mounted) return null
 
   return (
     <AppShell>

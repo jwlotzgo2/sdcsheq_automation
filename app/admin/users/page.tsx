@@ -228,11 +228,14 @@ export default function UsersPage() {
   const [saveMsg, setSaveMsg]         = useState('')
   const [showInvite, setShowInvite]   = useState(false)
   const isMobile = useIsMobile()
+  const [mounted, setMounted]         = useState(false)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
+
+  useEffect(() => { setMounted(true) }, [])
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -319,6 +322,8 @@ export default function UsersPage() {
 
   const activeUsers   = users.filter(u => u.is_active)
   const inactiveUsers = users.filter(u => !u.is_active)
+
+  if (!mounted) return null
 
   return (
     <AppShell>
