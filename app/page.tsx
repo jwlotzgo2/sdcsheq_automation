@@ -35,6 +35,7 @@ export default function HomePage() {
   const [userEmail, setUserEmail]     = useState('')
   const [userName, setUserName]       = useState('')
   const [role, setRole]               = useState('')
+  const [canCapture, setCanCapture]   = useState(false)
   const [stats, setStats]             = useState({
     pendingReview:    0,
     pendingApproval:  0,
@@ -60,11 +61,12 @@ export default function HomePage() {
 
       const { data: profile } = await supabase
         .from('user_profiles')
-        .select('role, full_name')
+        .select('role, full_name, can_capture_expenses')
         .eq('email', user.email)
         .maybeSingle()
       setRole(profile?.role ?? '')
       setUserName(profile?.full_name ?? user.email?.split('@')[0] ?? '')
+      setCanCapture(profile?.can_capture_expenses ?? false)
 
       const { data: invoices } = await supabase
         .from('invoices')

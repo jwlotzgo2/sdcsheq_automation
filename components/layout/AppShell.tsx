@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import TourOverlay from '@/components/TourOverlay'
 import { useTour } from '@/components/TourOverlay'
-import InvoiceChat from '@/components/InvoiceChat'
 
 
 const AMBER  = '#E8960C'
@@ -32,6 +31,7 @@ const MORE_NAV = [
   { href: '/help',            label: 'Help',           icon: '❓' },
   { href: '/xero-push',       label: 'Push to Xero',   icon: '📤' },
   { href: '/expenses',        label: 'Expenses',       icon: '🧾' },
+  { href: '/chat',           label: 'Team Chat',      icon: '💬' },
   { href: '/admin/users',     label: 'Users',          icon: '👥' },
   { href: '/admin/settings',  label: 'Settings',       icon: '⚙️' },
 ]
@@ -161,6 +161,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <NavItem href="/gl-codes"   label="GL Codes"      icon="📒" />
             <NavItem href="/xero-push"  label="Push to Xero"  icon="📤" />
           <NavItem href="/expenses"   label="Expenses"      icon="🧾" />
+          <NavItem href="/chat"       label="Team Chat"     icon="💬" />
           {canCapture && <NavItem href="/capture"    label="Capture"       icon="📷" />}
           <NavItem href="/help"        label="Help"          icon="❓" />
             <div style={{ padding: '12px 12px 6px', color: 'rgba(255,255,255,0.3)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '8px' }}>Admin</div>
@@ -182,7 +183,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </header>
           <main style={{ flex: 1, padding: '28px 24px', backgroundColor: LIGHT }}>{children}</main>
         <TourOverlay />
-        <InvoiceChat />
 
         </div>
       </div>
@@ -206,7 +206,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Page content */}
       <TourOverlay />
-      <InvoiceChat />
 
       <main style={{ flex: 1, padding: '16px', paddingBottom: '80px', overflowY: 'auto' }}>
         {children}

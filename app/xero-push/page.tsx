@@ -20,6 +20,16 @@ const fmtDate = (val: any) =>
 
 type PushStatus = 'idle' | 'pending' | 'success' | 'error' | 'skipped'
 
+function useIsMobile() {
+  const [v, setV] = useState(false)
+  useEffect(() => {
+    const check = () => setV(window.innerWidth < 768)
+    check(); window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+  return v
+}
+
 export default function XeroPushPage() {
   const [invoices, setInvoices]     = useState<any[]>([])
   const [selected, setSelected]     = useState<Set<string>>(new Set())
@@ -108,7 +118,7 @@ export default function XeroPushPage() {
       <div style={{ maxWidth: '900px' }}>
 
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'flex-end', flexDirection: isMobile ? 'column' : 'row', gap: '12px', marginBottom: '16px' }}>
           <div>
             <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: DARK, margin: '0 0 4px' }}>Push to Xero</h1>
             <p style={{ fontSize: '12px', color: MUTED, margin: 0 }}>
@@ -117,7 +127,7 @@ export default function XeroPushPage() {
           </div>
           {!done && invoices.length > 0 && (
             <button onClick={handlePush} disabled={pushing || selected.size === 0}
-              style={{ padding: '11px 24px', borderRadius: '9px', border: 'none', backgroundColor: pushing || selected.size === 0 ? '#94A3B8' : '#13B5EA', color: WHITE, fontSize: '14px', fontWeight: '700', cursor: pushing || selected.size === 0 ? 'not-allowed' : 'pointer' }}>
+              style={{ padding: '11px 24px', borderRadius: '9px', border: 'none', backgroundColor: pushing || selected.size === 0 ? '#94A3B8' : '#13B5EA', color: WHITE, fontSize: '14px', fontWeight: '700', cursor: pushing || selected.size === 0 ? 'not-allowed' : 'pointer', width: isMobile ? '100%' : 'auto' }}>
               {pushing ? 'Pushing...' : `Submit ${selected.size} Invoice${selected.size !== 1 ? 's' : ''} to Xero`}
             </button>
           )}
