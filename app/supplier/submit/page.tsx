@@ -77,8 +77,6 @@ const SubmitForm = memo(function SubmitForm({ supplierId, userEmail, onSuccess }
       const { error: uploadError } = await supabase.storage.from('invoices').upload(fileName, file, { contentType: file.type })
       if (uploadError) throw new Error(uploadError.message)
 
-      const { data: { publicUrl } } = supabase.storage.from('invoices').getPublicUrl(fileName)
-
       const { data: inv, error: invError } = await supabase.from('invoices').insert({
         status:          'INGESTED',
         supplier_id:     supplierId,
@@ -89,7 +87,7 @@ const SubmitForm = memo(function SubmitForm({ supplierId, userEmail, onSuccess }
         amount_vat:      parseFloat(amountVat)  || null,
         amount_incl:     parseFloat(amountIncl),
         notes:           notes || null,
-        pdf_url:         publicUrl,
+        storage_path:    fileName,
         currency:        'ZAR',
         submitted_by:    userEmail,
         record_type:     'INVOICE',
