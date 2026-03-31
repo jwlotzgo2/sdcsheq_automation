@@ -35,6 +35,7 @@ export default function SupplierLayout({ children }: { children: React.ReactNode
   const isMobile    = useIsMobile()
   const [supplierName, setSupplierName] = useState('')
   const [signingOut, setSigningOut]     = useState(false)
+  const [isAdmin, setIsAdmin]           = useState(false)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -91,6 +92,10 @@ export default function SupplierLayout({ children }: { children: React.ReactNode
             </Link>
           )
         })}
+        <button onClick={handleSignOut} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0' }}>
+          <span style={{ fontSize: '18px' }}>⏻</span>
+          <span style={{ fontSize: '9px', color: MUTED }}>{signingOut ? '...' : 'Sign out'}</span>
+        </button>
       </nav>
     </div>
   )
@@ -117,6 +122,11 @@ export default function SupplierLayout({ children }: { children: React.ReactNode
           })}
         </nav>
         <div style={{ padding: '16px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+          {isAdmin && (
+            <button onClick={() => router.push('/')} style={{ width: '100%', padding: '9px', borderRadius: '7px', border: 'none', backgroundColor: 'rgba(255,255,255,0.08)', color: AMBER, fontSize: '13px', cursor: 'pointer', marginBottom: '8px', fontWeight: '600' }}>
+              ⊞ Switch Portal
+            </button>
+          )}
           <button onClick={handleSignOut} style={{ width: '100%', padding: '9px', borderRadius: '7px', border: 'none', backgroundColor: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)', fontSize: '13px', cursor: 'pointer' }}>
             → {signingOut ? 'Signing out...' : 'Sign out'}
           </button>
