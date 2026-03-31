@@ -56,12 +56,26 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetchCounts()
+
+    // Load role from cache first for instant nav render
+    const cached = sessionStorage.getItem('ga_role')
+    const cachedCapture = sessionStorage.getItem('ga_capture')
+    if (cached) { setRole(cached); setCanCapture(cachedCapture === 'true') }
+
+    // Then verify from DB in background
     supabase.auth.getUser().then(({ data }) => {
       if (data.user?.email) {
         supabase.from('user_profiles').select('can_capture_expenses, role').eq('email', data.user.email).maybeSingle()
-          .then(({ data: p }) => { setCanCapture(p?.can_capture_expenses ?? false); setRole(p?.role ?? '') })
+          .then(({ data: p }) => {
+            const r = p?.role ?? ''
+            const c = p?.can_capture_expenses ?? false
+            setRole(r); setCanCapture(c)
+            sessionStorage.setItem('ga_role', r)
+            sessionStorage.setItem('ga_capture', String(c))
+          })
       }
     })
+
     const interval = setInterval(fetchCounts, 30000)
     return () => clearInterval(interval)
   }, [])
@@ -79,6 +93,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const handleSignOut = async () => {
     setSigningOut(true)
+    sessionStorage.removeItem('ga_role')
+    sessionStorage.removeItem('ga_capture')
     await supabase.auth.signOut()
     window.location.href = '/login'
   }
