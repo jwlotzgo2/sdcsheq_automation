@@ -92,6 +92,7 @@ export default function ExpensesPage() {
       .select('*, cost_centres(name), invoice_line_items(gl_codes(xero_account_code, name))')
       .eq('record_type', 'EXPENSE')
       .order('invoice_date', { ascending: false })
+      .limit(500)
     setExpenses(data ?? [])
     setLoading(false)
   }

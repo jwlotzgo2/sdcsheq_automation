@@ -97,9 +97,9 @@ export default function ReviewPage() {
     if (isMobile) setMobileView('detail')
 
     const [{ data: inv }, { data: lineData }, { data: audit }] = await Promise.all([
-      supabase.from('invoices').select('*').eq('id', id).single(),
+      supabase.from('invoices').select('id, status, supplier_id, supplier_name, invoice_number, invoice_date, due_date, amount_excl, amount_vat, amount_incl, currency, notes, storage_path, rejection_reason, record_type, submitted_by').eq('id', id).single(),
       supabase.from('invoice_line_items').select('*, gl_codes(id, xero_account_code, name)').eq('invoice_id', id).order('sort_order'),
-      supabase.from('audit_trail').select('*').eq('invoice_id', id).order('created_at'),
+      supabase.from('audit_trail').select('id, from_status, to_status, actor_email, notes, created_at').eq('invoice_id', id).order('created_at'),
     ])
 
     setSelected(inv)

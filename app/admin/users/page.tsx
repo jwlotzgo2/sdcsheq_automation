@@ -253,7 +253,7 @@ export default function UsersPage() {
 
   const fetchUsers = async () => {
     setLoading(true)
-    const { data } = await supabase.from('user_profiles').select('*').order('created_at')
+    const { data } = await supabase.from('user_profiles').select('user_id, email, full_name, role, is_active, can_capture_expenses, supplier_id, created_at, updated_at').order('created_at')
     setUsers(data ?? [])
     setLoading(false)
   }

@@ -57,7 +57,7 @@ function SettingsContent() {
     setLoading(true)
     const { data } = await supabase
       .from('xero_settings')
-      .select('*')
+      .select('id, tenant_id, tenant_name, access_token, refresh_token, token_expires_at, last_sync_at')
       .eq('id', '00000000-0000-0000-0000-000000000001')
       .maybeSingle()
     setXeroSettings(data)

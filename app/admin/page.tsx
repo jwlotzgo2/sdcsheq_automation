@@ -52,25 +52,33 @@ export default function AdminPage() {
 
       const [{ data: userList }, { data: invoiceData }, { data: xero }] = await Promise.all([
         supabase.from('user_profiles').select('*').order('created_at'),
-        supabase.from('invoices').select('status, record_type, created_at').not('status', 'in', '("REJECTED")'),
+        supabase.from('invoices').select('status, record_type', { count: 'exact' }).not('status', 'in', '("REJECTED")'),
         supabase.from('xero_settings').select('last_sync_at, tenant_name').limit(1).maybeSingle(),
       ])
 
       setUsers(userList ?? [])
       setXeroSettings(xero)
 
-      // Compute stats
-      const invs = invoiceData ?? []
+      // Run targeted count queries in parallel
+      const [{ count: totalC }, { count: reviewC }, { count: approvalC }, { count: approvedC }, { count: xeroC }, { count: paidC }, { count: expenseC }] = await Promise.all([
+        supabase.from('invoices').select('*', { count: 'exact', head: true }).not('status', 'in', '("REJECTED")'),
+        supabase.from('invoices').select('*', { count: 'exact', head: true }).in('status', ['PENDING_REVIEW','IN_REVIEW','RETURNED']),
+        supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('status', 'PENDING_APPROVAL'),
+        supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('status', 'APPROVED'),
+        supabase.from('invoices').select('*', { count: 'exact', head: true }).in('status', ['XERO_POSTED','XERO_AUTHORISED']),
+        supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('status', 'XERO_PAID'),
+        supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('record_type', 'EXPENSE'),
+      ])
       setStats({
-        totalInvoices:   invs.length,
-        pendingReview:   invs.filter(i => ['PENDING_REVIEW','IN_REVIEW','RETURNED'].includes(i.status)).length,
-        pendingApproval: invs.filter(i => i.status === 'PENDING_APPROVAL').length,
-        approved:        invs.filter(i => i.status === 'APPROVED').length,
-        xeroPosted:      invs.filter(i => ['XERO_POSTED','XERO_AUTHORISED'].includes(i.status)).length,
-        paid:            invs.filter(i => i.status === 'XERO_PAID').length,
-        expenses:        invs.filter(i => i.record_type === 'EXPENSE').length,
-        activeUsers:     (userList ?? []).filter(u => u.is_active).length,
-        supplierUsers:   (userList ?? []).filter(u => u.role === 'SUPPLIER').length,
+        totalInvoices:   totalC ?? 0,
+        pendingReview:   reviewC ?? 0,
+        pendingApproval: approvalC ?? 0,
+        approved:        approvedC ?? 0,
+        xeroPosted:      xeroC ?? 0,
+        paid:            paidC ?? 0,
+        expenses:        expenseC ?? 0,
+        activeUsers:     (userList ?? []).filter((u:any) => u.is_active).length,
+        supplierUsers:   (userList ?? []).filter((u:any) => u.role === 'SUPPLIER').length,
       })
       setLoading(false)
     }
