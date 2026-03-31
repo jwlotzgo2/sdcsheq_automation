@@ -19,7 +19,31 @@ export default function ResetPasswordPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  useEffect(() => { setMounted(true) }, [])
+  useEffect(() => {
+    setMounted(true)
+    // Handle Supabase password reset token from URL hash or query params
+    const handleToken = async () => {
+      // Check for hash fragment (#access_token=...&type=recovery)
+      const hash = window.location.hash
+      if (hash && hash.includes('access_token')) {
+        const params = new URLSearchParams(hash.substring(1))
+        const accessToken  = params.get('access_token')
+        const refreshToken = params.get('refresh_token')
+        const type         = params.get('type')
+        if (accessToken && refreshToken && type === 'recovery') {
+          const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+          if (error) setError('Invalid or expired reset link. Please request a new one.')
+        }
+      }
+      // Check for ?code= query param (newer Supabase PKCE flow)
+      const code = new URLSearchParams(window.location.search).get('code')
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code)
+        if (error) setError('Invalid or expired reset link. Please request a new one.')
+      }
+    }
+    handleToken()
+  }, [])
 
   const handleReset = async () => {
     if (!password || password !== confirm) {
