@@ -62,6 +62,18 @@ function useIsMobile() {
   return isMobile
 }
 
+const SkeletonRow = () => (
+  <div style={{ display: 'flex', gap: '10px', padding: '12px 16px', borderBottom: '1px solid #F1F5F9', alignItems: 'center' }}>
+    <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#EDE9E3', flexShrink: 0 }} />
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <div style={{ height: '12px', width: '55%', borderRadius: '4px', backgroundColor: '#EDE9E3' }} />
+      <div style={{ height: '10px', width: '35%', borderRadius: '4px', backgroundColor: '#F3F0EB' }} />
+    </div>
+    <div style={{ width: '80px', height: '12px', borderRadius: '4px', backgroundColor: '#EDE9E3' }} />
+    <div style={{ width: '70px', height: '14px', borderRadius: '4px', backgroundColor: '#EDE9E3' }} />
+  </div>
+)
+
 export default function InvoicesPage() {
   const [invoices, setInvoices]               = useState<any[]>([])
   const [loading, setLoading]                 = useState(true)

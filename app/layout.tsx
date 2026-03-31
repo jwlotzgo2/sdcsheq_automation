@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import PwaPrompt from '@/components/PwaPrompt'
+import PageTransition from '@/components/PageTransition'
 
 export const metadata: Metadata = {
   title: 'GoAutomate — SDC SHEQ',
@@ -32,7 +33,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body>
-        {children}
+        <PageTransition>
+          {children}
+        </PageTransition>
         <PwaPrompt />
       </body>
     </html>

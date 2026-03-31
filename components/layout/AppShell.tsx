@@ -55,41 +55,44 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   )
 
   useEffect(() => {
-    fetchCounts()
-
-    // Load role from cache first for instant nav render
+    // Load from cache immediately for instant render
     const cached = sessionStorage.getItem('ga_role')
     const cachedCapture = sessionStorage.getItem('ga_capture')
     if (cached) { setRole(cached); setCanCapture(cachedCapture === 'true') }
 
-    // Then verify from DB in background
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user?.email) {
-        supabase.from('user_profiles').select('can_capture_expenses, role').eq('email', data.user.email).maybeSingle()
-          .then(({ data: p }) => {
-            const r = p?.role ?? ''
-            const c = p?.can_capture_expenses ?? false
-            setRole(r); setCanCapture(c)
-            sessionStorage.setItem('ga_role', r)
-            sessionStorage.setItem('ga_capture', String(c))
-          })
-      }
-    })
+    // Single combined fetch — user profile + all counts in parallel
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user?.email) return
+      const [profileRes, rcRes, acRes, dcRes] = await Promise.all([
+        supabase.from('user_profiles').select('can_capture_expenses, role').eq('email', user.email).maybeSingle(),
+        supabase.from('invoices').select('*', { count: 'exact', head: true }).in('status', ['PENDING_REVIEW','IN_REVIEW','RETURNED']),
+        supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('status', 'PENDING_APPROVAL'),
+        supabase.from('duplicate_log').select('*', { count: 'exact', head: true }).eq('reviewed', false),
+      ])
+      const r = profileRes.data?.role ?? ''
+      const c = profileRes.data?.can_capture_expenses ?? false
+      setRole(r); setCanCapture(c)
+      setReviewCount(rcRes.count ?? 0)
+      setApproveCount(acRes.count ?? 0)
+      setDuplicateCount(dcRes.count ?? 0)
+      sessionStorage.setItem('ga_role', r)
+      sessionStorage.setItem('ga_capture', String(c))
+    }
+    init()
 
-    const interval = setInterval(fetchCounts, 30000)
+    const interval = setInterval(async () => {
+      const [rcRes, acRes, dcRes] = await Promise.all([
+        supabase.from('invoices').select('*', { count: 'exact', head: true }).in('status', ['PENDING_REVIEW','IN_REVIEW','RETURNED']),
+        supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('status', 'PENDING_APPROVAL'),
+        supabase.from('duplicate_log').select('*', { count: 'exact', head: true }).eq('reviewed', false),
+      ])
+      setReviewCount(rcRes.count ?? 0)
+      setApproveCount(acRes.count ?? 0)
+      setDuplicateCount(dcRes.count ?? 0)
+    }, 30000)
     return () => clearInterval(interval)
   }, [])
-
-  const fetchCounts = async () => {
-    const [{ count: rc }, { count: ac }, { count: dc }] = await Promise.all([
-      supabase.from('invoices').select('*', { count: 'exact', head: true }).in('status', ['PENDING_REVIEW', 'IN_REVIEW', 'RETURNED']),
-      supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('status', 'PENDING_APPROVAL'),
-      supabase.from('duplicate_log').select('*', { count: 'exact', head: true }).eq('reviewed', false),
-    ])
-    setReviewCount(rc ?? 0)
-    setApproveCount(ac ?? 0)
-    setDuplicateCount(dc ?? 0)
-  }
 
   const handleSignOut = async () => {
     setSigningOut(true)
