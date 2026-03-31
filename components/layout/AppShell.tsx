@@ -16,25 +16,14 @@ const LIGHT  = '#F5F5F2'
 const MUTED  = '#8A8878'
 
 const PRIMARY_NAV = [
-  { href: '/',             label: 'Portals',        icon: '⊞' },
-  { href: '/dashboard',  label: 'Dashboard',     icon: '▦' },
-  { href: '/review',     label: 'Review',         icon: '📋' },
-  { href: '/approve',    label: 'Approve',        icon: '✅' },
-  { href: '/invoices',   label: 'Invoices',       icon: '🗒' },
+  { href: '/',          label: 'Portals',  icon: '⊞',  roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/dashboard', label: 'Dashboard',icon: '▦',  roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/review',    label: 'Review',   icon: '📋', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/approve',   label: 'Approve',  icon: '✅', roles: ['APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/invoices',  label: 'Invoices', icon: '🗒', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
 ]
 
-const MORE_NAV = [
-  { href: '/duplicates',      label: 'Duplicates',     icon: '⚠️' },
-  
-  { href: '/suppliers',       label: 'Suppliers',      icon: '🏢' },
-  { href: '/gl-codes',        label: 'GL Codes',       icon: '📒' },
-  { href: '/help',            label: 'Help',           icon: '❓' },
-  { href: '/xero-push',       label: 'Push to Xero',   icon: '📤' },
-  { href: '/expenses',        label: 'Expenses',       icon: '🧾' },
-  { href: '/chat',           label: 'Team Chat',      icon: '💬' },
-  { href: '/admin/users',     label: 'Users',          icon: '👥' },
-  { href: '/admin/settings',  label: 'Settings',       icon: '⚙️' },
-]
+
 
 function useWindowWidth() {
   const [width, setWidth] = useState(0)
@@ -58,6 +47,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [drawerOpen, setDrawerOpen]           = useState(false)
   const { startTour } = useTour()
   const [canCapture, setCanCapture] = useState(false)
+  const [role, setRole]               = useState('')
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -68,8 +58,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     fetchCounts()
     supabase.auth.getUser().then(({ data }) => {
       if (data.user?.email) {
-        supabase.from('user_profiles').select('can_capture_expenses').eq('email', data.user.email).maybeSingle()
-          .then(({ data: p }) => setCanCapture(p?.can_capture_expenses ?? false))
+        supabase.from('user_profiles').select('can_capture_expenses, role').eq('email', data.user.email).maybeSingle()
+          .then(({ data: p }) => { setCanCapture(p?.can_capture_expenses ?? false); setRole(p?.role ?? '') })
       }
     })
     const interval = setInterval(fetchCounts, 30000)
@@ -213,7 +203,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Bottom nav */}
       <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, height: '60px', backgroundColor: WHITE, borderTop: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', zIndex: 50 }}>
-        {PRIMARY_NAV.map(({ href, label, icon }) => {
+        {PRIMARY_NAV.filter(i => !role || i.roles.includes(role)).map(({ href, label, icon }) => {
           const badge  = getBadge(href)
           const active = isActive(href)
           return (
@@ -250,7 +240,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div style={{ width: '40px', height: '4px', backgroundColor: BORDER, borderRadius: '2px', margin: '0 auto 16px' }} />
 
             <div style={{ padding: '0 8px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
-              {[...MORE_NAV, ...(canCapture ? [{ href: '/capture', label: 'Capture', icon: '📷' }] : [])].map(({ href, label, icon }) => {
+              {[...MORE_NAV_BASE.filter(i => !role || i.roles.includes(role)), ...(canCapture ? [{ href: '/capture', label: 'Capture', icon: '📷', roles: [] }] : [])].map(({ href, label, icon }) => {
                 const badge  = getBadge(href)
                 const active = isActive(href)
                 return (
