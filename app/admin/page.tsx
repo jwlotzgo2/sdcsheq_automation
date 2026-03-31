@@ -19,12 +19,23 @@ const RED    = '#EF4444'
 const fmtDate = (val: any) =>
   val ? new Date(val).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
 
+function useIsMobile() {
+  const [v, setV] = useState(false)
+  useEffect(() => {
+    const check = () => setV(window.innerWidth < 768)
+    check(); window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+  return v
+}
+
 export default function AdminPage() {
   const [users, setUsers]       = useState<any[]>([])
   const [stats, setStats]       = useState<any>({})
   const [loading, setLoading]   = useState(true)
   const [xeroSettings, setXeroSettings] = useState<any>(null)
   const router = useRouter()
+  const isMobile = useIsMobile()
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -91,7 +102,7 @@ export default function AdminPage() {
         </div>
 
         {/* Pipeline stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
           {[
             { label: 'Total Invoices',    value: stats.totalInvoices,   color: DARK },
             { label: 'Pending Review',    value: stats.pendingReview,   color: AMBER },
@@ -106,7 +117,7 @@ export default function AdminPage() {
         </div>
 
         {/* Quick links */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: '10px', marginBottom: '24px' }}>
           {[
             { label: 'Users',         href: '/admin/users',         icon: '👥', color: PURPLE },
             { label: 'Settings',      href: '/admin/settings',      icon: '⚙️', color: DARK },
@@ -124,7 +135,7 @@ export default function AdminPage() {
         </div>
 
         {/* Two columns: users + xero status */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '16px' }}>
 
           {/* Users table */}
           <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, overflow: 'hidden' }}>
@@ -158,7 +169,7 @@ export default function AdminPage() {
           </div>
 
           {/* Right column */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: isMobile ? '100%' : '320px', flexShrink: 0 }}>
 
             {/* Xero status */}
             <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, padding: '16px' }}>
