@@ -16,8 +16,7 @@ const LIGHT  = '#F5F5F2'
 const MUTED  = '#8A8878'
 
 const PRIMARY_NAV = [
-  { href: '/',          label: 'Portals',  icon: '⊞',  roles: ['FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/dashboard', label: 'Home',     icon: '🏠', roles: ['AP_CLERK','REVIEWER','APPROVER'] },
+  { href: '/',          label: 'Home',     icon: '🏠', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/dashboard', label: 'Dashboard',icon: '▦',  roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/review',    label: 'Review',   icon: '📋', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/approve',   label: 'Approve',  icon: '✅', roles: ['APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
@@ -140,24 +139,27 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', marginTop: '2px' }}>AP Automation</div>
           </div>
           <nav style={{ padding: '12px 0', flex: 1 }}>
+            {role && <>
             <div style={{ padding: '0 12px 6px', color: 'rgba(255,255,255,0.3)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Main</div>
-            <NavItem href="/"           label="Home"          icon="🏠" />
-            <NavItem href="/dashboard"  label="Dashboard"     icon="▦" />
-            <NavItem href="/invoices"   label="Invoices"      icon="🗒" />
-            <NavItem href="/review"     label="Review Queue"  icon="📋" badge={reviewCount} />
-            <NavItem href="/approve"    label="Approve Queue" icon="✅" badge={approveCount} />
-            <NavItem href="/duplicates" label="Duplicates"    icon="⚠️" badge={duplicateCount} />
-            
-            <NavItem href="/suppliers"  label="Suppliers"     icon="🏢" />
-            <NavItem href="/gl-codes"   label="GL Codes"      icon="📒" />
-            <NavItem href="/xero-push"  label="Push to Xero"  icon="📤" />
-          <NavItem href="/expenses"   label="Expenses"      icon="🧾" />
-          <NavItem href="/chat"       label="Team Chat"     icon="💬" />
-          {canCapture && <NavItem href="/capture"    label="Capture"       icon="📷" />}
-          <NavItem href="/help"        label="Help"          icon="❓" />
-            <div style={{ padding: '12px 12px 6px', color: 'rgba(255,255,255,0.3)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '8px' }}>Admin</div>
-            <NavItem href="/admin/users"    label="Users"    icon="👥" />
-            <NavItem href="/admin/settings" label="Settings" icon="⚙️" />
+            <NavItem href="/"          label="Home"          icon="🏠" />
+            <NavItem href="/dashboard" label="Dashboard"     icon="▦" />
+            <NavItem href="/invoices"  label="Invoices"      icon="🗒" />
+            {['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/review"    label="Review Queue"  icon="📋" badge={reviewCount} />}
+            {['APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/approve"   label="Approve Queue" icon="✅" badge={approveCount} />}
+            {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/duplicates" label="Duplicates"   icon="⚠️" badge={duplicateCount} />}
+            {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/suppliers"  label="Suppliers"    icon="🏢" />}
+            {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/gl-codes"   label="GL Codes"     icon="📒" />}
+            {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/xero-push"  label="Push to Xero" icon="📤" />}
+            {['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/expenses"  label="Expenses"     icon="🧾" />}
+            {['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/chat"      label="Team Chat"    icon="💬" />}
+            {canCapture && <NavItem href="/capture" label="Capture" icon="📷" />}
+            <NavItem href="/help" label="Help" icon="❓" />
+            {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <>
+              <div style={{ padding: '12px 12px 6px', color: 'rgba(255,255,255,0.3)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '8px' }}>Admin</div>
+              <NavItem href="/admin/users"    label="Users"    icon="👥" />
+              <NavItem href="/admin/settings" label="Settings" icon="⚙️" />
+            </>}
+            </>}
           </nav>
           <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
             <button onClick={handleSignOut} disabled={signingOut} style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', border: 'none', borderRadius: '6px', color: 'rgba(255,255,255,0.45)', fontSize: '13px', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
@@ -204,7 +206,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Bottom nav */}
       <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, height: '60px', backgroundColor: WHITE, borderTop: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', zIndex: 50 }}>
-        {PRIMARY_NAV.filter(i => !role || i.roles.includes(role)).map(({ href, label, icon }) => {
+        {PRIMARY_NAV.filter(i => role && i.roles.includes(role)).map(({ href, label, icon }) => {
           const badge  = getBadge(href)
           const active = isActive(href)
           return (
@@ -241,7 +243,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div style={{ width: '40px', height: '4px', backgroundColor: BORDER, borderRadius: '2px', margin: '0 auto 16px' }} />
 
             <div style={{ padding: '0 8px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
-              {[...MORE_NAV_BASE.filter(i => !role || i.roles.includes(role)), ...(canCapture ? [{ href: '/capture', label: 'Capture', icon: '📷', roles: [] }] : [])].map(({ href, label, icon }) => {
+              {[...MORE_NAV_BASE.filter(i => role && i.roles.includes(role)), ...(canCapture ? [{ href: '/capture', label: 'Capture', icon: '📷', roles: [] }] : [])].map(({ href, label, icon }) => {
                 const badge  = getBadge(href)
                 const active = isActive(href)
                 return (
