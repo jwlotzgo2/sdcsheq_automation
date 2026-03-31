@@ -16,7 +16,8 @@ const LIGHT  = '#F5F5F2'
 const MUTED  = '#8A8878'
 
 const PRIMARY_NAV = [
-  { href: '/',          label: 'Portals',  icon: '⊞',  roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/',          label: 'Portals',  icon: '⊞',  roles: ['FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/dashboard', label: 'Home',     icon: '🏠', roles: ['AP_CLERK','REVIEWER','APPROVER'] },
   { href: '/dashboard', label: 'Dashboard',icon: '▦',  roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/review',    label: 'Review',   icon: '📋', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/approve',   label: 'Approve',  icon: '✅', roles: ['APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
