@@ -16,7 +16,7 @@ const LIGHT  = '#F5F5F2'
 const MUTED  = '#8A8878'
 
 const PRIMARY_NAV = [
-  { href: '/',             label: 'Home',           icon: '🏠' },
+  { href: '/',             label: 'Portals',        icon: '⊞' },
   { href: '/dashboard',  label: 'Dashboard',     icon: '▦' },
   { href: '/review',     label: 'Review',         icon: '📋' },
   { href: '/approve',    label: 'Approve',        icon: '✅' },

@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
-import AppShell from '@/components/layout/AppShell'
 
 const AMBER  = '#E8960C'
 const DARK   = '#2A2A2A'
@@ -12,10 +11,8 @@ const BORDER = '#E2E0D8'
 const LIGHT  = '#F5F5F2'
 const MUTED  = '#8A8878'
 const WHITE  = '#FFFFFF'
-const RED    = '#EF4444'
-const BLUE   = '#3B82F6'
-const PURPLE = '#8B5CF6'
 const TEAL   = '#13B5EA'
+const PURPLE = '#8B5CF6'
 
 function useIsMobile() {
   const [v, setV] = useState(false)
@@ -27,25 +24,45 @@ function useIsMobile() {
   return v
 }
 
-const fmt = (val: any) =>
-  val != null ? `R ${Number(val).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}` : '—'
+const PORTALS = [
+  {
+    id: 'user',
+    icon: '📋',
+    title: 'User App',
+    description: 'Review and approve invoices, manage the AP pipeline, push to Xero, and capture expenses.',
+    href: '/dashboard',
+    color: AMBER,
+    bg: '#FEF3C7',
+    roles: ['AP_CLERK', 'REVIEWER', 'APPROVER', 'FINANCE_MANAGER', 'AP_ADMIN'],
+  },
+  {
+    id: 'supplier',
+    icon: '🏢',
+    title: 'Supplier Portal',
+    description: 'Submit invoices, track payment status, and manage your company profile.',
+    href: '/supplier',
+    color: TEAL,
+    bg: '#EBF9FF',
+    roles: ['SUPPLIER', 'AP_ADMIN'],
+  },
+  {
+    id: 'admin',
+    icon: '⚙️',
+    title: 'Admin Portal',
+    description: 'Manage users, settings, Xero connection, cost centres, and system configuration.',
+    href: '/admin',
+    color: PURPLE,
+    bg: '#F5F3FF',
+    roles: ['AP_ADMIN', 'FINANCE_MANAGER'],
+  },
+]
 
 export default function HomePage() {
-  const [loading, setLoading]         = useState(true)
-  const [userEmail, setUserEmail]     = useState('')
-  const [userName, setUserName]       = useState('')
-  const [role, setRole]               = useState('')
-  const [canCapture, setCanCapture]   = useState(false)
-  const [stats, setStats]             = useState({
-    pendingReview:    0,
-    pendingApproval:  0,
-    overdue:          0,
-    approvedReady:    0,
-    overdueValue:     0,
-    totalPipeline:    0,
-    xeroPosted:       0,
-  })
-  const router  = useRouter()
+  const [role, setRole]         = useState('')
+  const [userName, setUserName] = useState('')
+  const [loading, setLoading]   = useState(true)
+  const [mounted, setMounted]   = useState(false)
+  const router   = useRouter()
   const isMobile = useIsMobile()
 
   const supabase = createBrowserClient(
@@ -53,46 +70,36 @@ export default function HomePage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
+  useEffect(() => { setMounted(true) }, [])
+
   useEffect(() => {
+    if (!mounted) return
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      setUserEmail(user.email ?? '')
-
+      if (!user) { router.push('/login'); return }
       const { data: profile } = await supabase
         .from('user_profiles')
         .select('role, full_name, can_capture_expenses')
         .eq('email', user.email)
         .maybeSingle()
-      setRole(profile?.role ?? '')
+      const r = profile?.role ?? ''
+      setRole(r)
       setUserName(profile?.full_name ?? user.email?.split('@')[0] ?? '')
-      setCanCapture(profile?.can_capture_expenses ?? false)
 
-      const { data: invoices } = await supabase
-        .from('invoices')
-        .select('id, status, due_date, amount_incl')
-        .not('status', 'in', '("REJECTED","XERO_PAID")')
+      // Single portal users go straight there
+      if (r === 'SUPPLIER') { router.push('/supplier'); return }
+      if (r === 'AP_CLERK' || r === 'REVIEWER' || r === 'APPROVER') { router.push('/dashboard'); return }
 
-      if (!invoices) { setLoading(false); return }
-
-      const now = new Date()
-      const pendingReview   = invoices.filter(i => ['PENDING_REVIEW','IN_REVIEW','RETURNED'].includes(i.status)).length
-      const pendingApproval = invoices.filter(i => i.status === 'PENDING_APPROVAL').length
-      const approvedReady   = invoices.filter(i => i.status === 'APPROVED').length
-      const xeroPosted      = invoices.filter(i => i.status === 'XERO_POSTED').length
-      const overdueInvs     = invoices.filter(i =>
-        i.due_date && new Date(i.due_date) < now &&
-        !['APPROVED','XERO_POSTED','XERO_AUTHORISED'].includes(i.status)
-      )
-      const overdue      = overdueInvs.length
-      const overdueValue = overdueInvs.reduce((s, i) => s + (Number(i.amount_incl) || 0), 0)
-      const totalPipeline = invoices.reduce((s, i) => s + (Number(i.amount_incl) || 0), 0)
-
-      setStats({ pendingReview, pendingApproval, overdue, approvedReady, overdueValue, totalPipeline, xeroPosted })
       setLoading(false)
     }
     load()
-  }, [])
+  }, [mounted])
+
+  const availablePortals = PORTALS.filter(p => p.roles.includes(role))
+
+  // If only one portal, redirect immediately (handled above for known single-portal roles)
+  // For unknown/null roles, show all
+  const portals = availablePortals.length > 0 ? availablePortals : PORTALS
 
   const greeting = () => {
     const h = new Date().getHours()
@@ -101,149 +108,111 @@ export default function HomePage() {
     return 'Good evening'
   }
 
-  type Card = {
-    icon: string
-    title: string
-    description: string
-    href: string
-    count?: number
-    countLabel?: string
-    value?: string
-    color: string
-    bg: string
-    urgent?: boolean
-    show?: boolean
-  }
-
-  const cards: Card[] = [
-    {
-      icon: '📋',
-      title: 'Review Queue',
-      description: stats.pendingReview > 0
-        ? `${stats.pendingReview} invoice${stats.pendingReview !== 1 ? 's' : ''} waiting for review`
-        : 'Review queue is clear — nice work!',
-      href: '/review',
-      count: stats.pendingReview,
-      countLabel: 'to review',
-      color: DARK,
-      bg: '#FEF3C7',
-      urgent: stats.pendingReview > 0,
-      show: true,
-    },
-    {
-      icon: '✅',
-      title: 'Approve Queue',
-      description: stats.pendingApproval > 0
-        ? `${stats.pendingApproval} invoice${stats.pendingApproval !== 1 ? 's' : ''} waiting for approval`
-        : 'Nothing pending approval right now',
-      href: '/approve',
-      count: stats.pendingApproval,
-      countLabel: 'to approve',
-      color: DARK,
-      bg: '#F0FDF4',
-      urgent: stats.pendingApproval > 0,
-      show: true,
-    },
-
-    {
-      icon: '📤',
-      title: 'Push to Xero',
-      description: stats.approvedReady > 0
-        ? `${stats.approvedReady} approved invoice${stats.approvedReady !== 1 ? 's' : ''} ready to post`
-        : 'No invoices waiting to be pushed',
-      href: '/xero-push',
-      count: stats.approvedReady,
-      countLabel: 'ready',
-      color: WHITE,
-      bg: TEAL,
-      urgent: stats.approvedReady > 0,
-      show: true,
-    },
-  ]
-
-  const cols = isMobile ? 1 : cards.length <= 4 ? 2 : 3
+  if (!mounted || loading) return (
+    <div style={{ minHeight: '100vh', backgroundColor: DARK, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ display: 'inline-block', backgroundColor: AMBER, borderRadius: '4px', padding: '4px 14px', marginBottom: '16px' }}>
+          <span style={{ color: WHITE, fontWeight: 'bold', fontSize: '13px', letterSpacing: '0.08em' }}>GoAutomate</span>
+        </div>
+        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px' }}>Loading...</div>
+      </div>
+    </div>
+  )
 
   return (
-    <AppShell>
-      <div style={{ maxWidth: '900px' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: DARK, display: 'flex', flexDirection: 'column', fontFamily: 'Arial, sans-serif' }}>
+
+      {/* Header */}
+      <header style={{ padding: isMobile ? '20px 24px 0' : '32px 64px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'inline-block', backgroundColor: AMBER, borderRadius: '4px', padding: '4px 14px' }}>
+          <span style={{ color: WHITE, fontWeight: 'bold', fontSize: '13px', letterSpacing: '0.08em' }}>GoAutomate</span>
+        </div>
+        <button onClick={async () => { await supabase.auth.signOut(); router.push('/login') }}
+          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.35)', fontSize: '13px', cursor: 'pointer' }}>
+          Sign out
+        </button>
+      </header>
+
+      {/* Content */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: isMobile ? '32px 24px 40px' : '48px 64px' }}>
 
         {/* Greeting */}
-        <div style={{ marginBottom: '28px' }}>
-          <h1 style={{ fontSize: isMobile ? '22px' : '26px', fontWeight: 'bold', color: DARK, margin: '0 0 4px' }}>
+        <div style={{ marginBottom: isMobile ? '32px' : '48px', textAlign: 'center' }}>
+          <h1 style={{ color: WHITE, fontSize: isMobile ? '24px' : '32px', fontWeight: 'bold', margin: '0 0 8px', lineHeight: 1.2 }}>
             {greeting()}{userName ? `, ${userName}` : ''} 👋
           </h1>
-          <p style={{ fontSize: '13px', color: MUTED, margin: 0 }}>
-            Here's what needs your attention today.
+          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '14px', margin: 0 }}>
+            SDC SHEQ · AP Automation Platform
+          </p>
+          <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: '13px', margin: '6px 0 0' }}>
+            Select a portal to continue
           </p>
         </div>
 
-        {/* Overdue banner — extra prominent if exists */}
-        {!loading && stats.overdue > 0 && (
-          <div onClick={() => router.push('/invoices')}
-            style={{ backgroundColor: RED, borderRadius: '12px', padding: '16px 20px', marginBottom: '20px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '28px' }}>🚨</span>
-              <div>
-                <div style={{ fontSize: '15px', fontWeight: '700', color: WHITE }}>
-                  {stats.overdue} Overdue Invoice{stats.overdue !== 1 ? 's' : ''}
-                </div>
-                <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.75)' }}>
-                  {fmt(stats.overdueValue)} past due date — action required
-                </div>
+        {/* Portal cards */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : portals.length === 1 ? '400px' : portals.length === 2 ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
+          gap: '16px',
+          maxWidth: portals.length === 1 ? '400px' : portals.length === 2 ? '720px' : '960px',
+          margin: '0 auto',
+          width: '100%',
+        }}>
+          {portals.map(portal => (
+            <div key={portal.id}
+              onClick={() => router.push(portal.href)}
+              style={{
+                backgroundColor: WHITE,
+                borderRadius: '16px',
+                padding: isMobile ? '24px' : '32px',
+                cursor: 'pointer',
+                border: `2px solid transparent`,
+                transition: 'transform 0.15s, box-shadow 0.15s, border-color 0.15s',
+                position: 'relative',
+                overflow: 'hidden',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.transform = 'translateY(-4px)'
+                e.currentTarget.style.boxShadow = `0 12px 40px rgba(0,0,0,0.3)`
+                e.currentTarget.style.borderColor = portal.color
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = 'none'
+                e.currentTarget.style.borderColor = 'transparent'
+              }}
+            >
+              {/* Icon */}
+              <div style={{ width: '56px', height: '56px', borderRadius: '14px', backgroundColor: portal.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', marginBottom: '16px' }}>
+                {portal.icon}
               </div>
+
+              {/* Title */}
+              <div style={{ fontSize: isMobile ? '18px' : '20px', fontWeight: '700', color: DARK, marginBottom: '8px' }}>
+                {portal.title}
+              </div>
+
+              {/* Description */}
+              <div style={{ fontSize: '13px', color: MUTED, lineHeight: 1.6, marginBottom: '20px' }}>
+                {portal.description}
+              </div>
+
+              {/* CTA */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: portal.color, fontWeight: '700', fontSize: '13px' }}>
+                Open {portal.title}
+                <span style={{ fontSize: '16px' }}>→</span>
+              </div>
+
+              {/* Colour accent bottom bar */}
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '4px', backgroundColor: portal.color }} />
             </div>
-            <div style={{ color: WHITE, fontSize: '20px', flexShrink: 0 }}>→</div>
-          </div>
-        )}
-
-        {/* Action cards */}
-        {loading ? (
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '14px' }}>
-            {[1,2,3,4].map(i => (
-              <div key={i} style={{ backgroundColor: WHITE, borderRadius: '12px', border: `1px solid ${BORDER}`, padding: '24px', height: '130px', opacity: 0.4 }} />
-            ))}
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '14px' }}>
-            {cards.map((card, i) => (
-              <div key={i} onClick={() => router.push(card.href)}
-                style={{
-                  backgroundColor: card.bg, borderRadius: '12px',
-                  border: card.urgent ? `2px solid ${card.color === WHITE ? 'rgba(255,255,255,0.3)' : AMBER}` : `1px solid ${BORDER}`,
-                  padding: '20px', cursor: 'pointer', position: 'relative', overflow: 'hidden',
-                  transition: 'transform 0.15s, box-shadow 0.15s',
-                  boxShadow: card.urgent ? '0 4px 20px rgba(0,0,0,0.12)' : '0 1px 4px rgba(0,0,0,0.06)',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 28px rgba(0,0,0,0.15)' }}
-                onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = card.urgent ? '0 4px 20px rgba(0,0,0,0.12)' : '0 1px 4px rgba(0,0,0,0.06)' }}
-              >
-                {/* Count badge */}
-                {card.count !== undefined && card.count > 0 && (
-                  <div style={{ position: 'absolute', top: '16px', right: '16px', backgroundColor: card.color === WHITE ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)', borderRadius: '20px', padding: '3px 10px', fontSize: '13px', fontWeight: '700', color: card.color }}>
-                    {card.count} {card.countLabel}
-                  </div>
-                )}
-                {card.count !== undefined && card.count === 0 && (
-                  <div style={{ position: 'absolute', top: '16px', right: '16px' }}>
-                    <span style={{ fontSize: '18px' }}>✓</span>
-                  </div>
-                )}
-
-                <div style={{ fontSize: '32px', marginBottom: '10px' }}>{card.icon}</div>
-                <div style={{ fontSize: '15px', fontWeight: '700', color: card.color, marginBottom: '6px' }}>{card.title}</div>
-                <div style={{ fontSize: '12px', color: card.color === WHITE ? 'rgba(255,255,255,0.65)' : MUTED, lineHeight: 1.5 }}>{card.description}</div>
-
-                {card.value && (
-                  <div style={{ marginTop: '10px', fontSize: '13px', fontWeight: '600', color: card.color === WHITE ? 'rgba(255,255,255,0.85)' : DARK }}>{card.value}</div>
-                )}
-
-                {/* Arrow */}
-                <div style={{ position: 'absolute', bottom: '18px', right: '18px', color: card.color === WHITE ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.15)', fontSize: '20px' }}>→</div>
-              </div>
-            ))}
-          </div>
-        )}
+          ))}
+        </div>
       </div>
-    </AppShell>
+
+      <div style={{ textAlign: 'center', paddingBottom: '24px', fontSize: '11px', color: 'rgba(255,255,255,0.15)' }}>
+        Powered by Go 2 Analytics · Microsoft Analytics Partner
+      </div>
+    </div>
   )
 }

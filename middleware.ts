@@ -41,20 +41,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Redirect supplier role to supplier portal
-  if (user && !request.nextUrl.pathname.startsWith('/supplier') && !isPublicPath) {
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('role')
-      .eq('email', user.email)
-      .maybeSingle()
-    if (profile?.role === 'SUPPLIER') {
-      const url = request.nextUrl.clone()
-      url.pathname = '/supplier'
-      return NextResponse.redirect(url)
-    }
-  }
-
   return supabaseResponse
 }
 
