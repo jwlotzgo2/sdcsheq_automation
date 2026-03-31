@@ -62,10 +62,23 @@ export default function DashboardPage() {
   const [avgTimes, setAvgTimes]   = useState<{ stage: string; avgHours: number | null }[]>([])
   const [aging, setAging]         = useState<{ status: string; label: string; color: string; buckets: number[] }[]>([])
   const isMobile = useIsMobile()
+  const [userName, setUserName] = useState('')
+  const [userRole, setUserRole] = useState('')
 
   const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
-  useEffect(() => { fetchAll() }, [dateFilter])
+  useEffect(() => {
+    fetchAll()
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.email) {
+        supabase.from('user_profiles').select('full_name, role').eq('email', data.user.email).maybeSingle()
+          .then(({ data: p }) => {
+            setUserName(p?.full_name ?? data.user?.email?.split('@')[0] ?? '')
+            setUserRole(p?.role ?? '')
+          })
+      }
+    })
+  }, [dateFilter])
 
   const { from, to, label: periodLabel } = getDateRange(dateFilter)
 
@@ -148,10 +161,32 @@ export default function DashboardPage() {
     { label: 'Avg Process Time',    value: fmtHours(kpis.avgProcessingHours), color: '#3B82F6', bg: '#EBF4FF', link: null,      note: periodLabel },
   ]
 
+  const ROLE_LABELS: Record<string, string> = {
+    AP_CLERK: 'AP Clerk', REVIEWER: 'Reviewer', APPROVER: 'Approver',
+    FINANCE_MANAGER: 'Finance Manager', AP_ADMIN: 'Admin', SUPPLIER: 'Supplier',
+  }
+  const greeting = () => { const h = new Date().getHours(); if (h < 12) return 'Good morning'; if (h < 17) return 'Good afternoon'; return 'Good evening' }
+
   return (
     <AppShell>
       <WelcomePopup />
       <div style={{ maxWidth: '1300px' }}>
+
+        {/* Welcome banner */}
+        <div style={{ backgroundColor: DARK, borderRadius: '10px', padding: isMobile ? '14px 16px' : '16px 20px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: isMobile ? '15px' : '17px', fontWeight: '700', color: WHITE }}>
+              {greeting()}{userName ? `, ${userName}` : ''} 👋
+            </div>
+            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', marginTop: '2px' }}>
+              SDC SHEQ · {ROLE_LABELS[userRole] ?? userRole}
+            </div>
+          </div>
+          <div style={{ display: 'inline-block', backgroundColor: AMBER, borderRadius: '4px', padding: '3px 10px', flexShrink: 0 }}>
+            <span style={{ color: WHITE, fontWeight: 'bold', fontSize: '11px', letterSpacing: '0.08em' }}>GoAutomate</span>
+          </div>
+        </div>
+
         {/* Header + date filter */}
         <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'flex-end', marginBottom: '16px', gap: '12px' }}>
           <div>
