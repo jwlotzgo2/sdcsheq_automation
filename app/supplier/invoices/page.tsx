@@ -83,7 +83,7 @@ export default function SupplierInvoices() {
         .select('supplier_id, role')
         .eq('email', user.email)
         .maybeSingle()
-      if (profile?.role !== 'SUPPLIER' || !profile.supplier_id) { router.push('/'); return }
+      if (!['SUPPLIER','AP_ADMIN'].includes(profile?.role ?? '') || !profile.supplier_id) { router.push('/'); return }
       setSupplierId(profile.supplier_id)
       const { data } = await supabase
         .from('invoices')

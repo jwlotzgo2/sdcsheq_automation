@@ -101,7 +101,7 @@ export default function SupplierProfile() {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return
       const { data: profile } = await supabase.from('user_profiles').select('supplier_id, role').eq('email', data.user.email).maybeSingle()
-      if (profile?.role !== 'SUPPLIER' || !profile.supplier_id) { router.push('/'); return }
+      if (!['SUPPLIER','AP_ADMIN'].includes(profile?.role ?? '') || !profile.supplier_id) { router.push('/'); return }
       setSupplierId(profile.supplier_id)
       const { data: sup } = await supabase.from('suppliers').select('*').eq('id', profile.supplier_id).single()
       setSupplier(sup)

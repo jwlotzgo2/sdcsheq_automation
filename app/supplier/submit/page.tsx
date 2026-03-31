@@ -218,7 +218,7 @@ export default function SupplierSubmit() {
       if (!data.user) return
       setUserEmail(data.user.email ?? '')
       const { data: profile } = await supabase.from('user_profiles').select('supplier_id, role').eq('email', data.user.email).maybeSingle()
-      if (profile?.role !== 'SUPPLIER' || !profile.supplier_id) { router.push('/'); return }
+      if (!['SUPPLIER','AP_ADMIN'].includes(profile?.role ?? '') || !profile.supplier_id) { router.push('/'); return }
       setSupplierId(profile.supplier_id)
       setLoading(false)
     })

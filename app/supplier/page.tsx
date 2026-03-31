@@ -54,7 +54,7 @@ export default function SupplierDashboard() {
         .select('supplier_id, role')
         .eq('email', user.email)
         .maybeSingle()
-      if (profile?.role !== 'SUPPLIER' || !profile.supplier_id) { router.push('/'); return }
+      if (!['SUPPLIER','AP_ADMIN'].includes(profile?.role ?? '') || !profile.supplier_id) { router.push('/'); return }
 
       const [{ data: sup }, { data: invs }] = await Promise.all([
         supabase.from('suppliers').select('*').eq('id', profile.supplier_id).single(),

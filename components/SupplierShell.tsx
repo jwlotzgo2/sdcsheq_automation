@@ -49,7 +49,7 @@ export default function SupplierLayout({ children }: { children: React.ReactNode
         .select('role, supplier_id, suppliers(name)')
         .eq('email', data.user.email)
         .maybeSingle()
-      if (profile?.role !== 'SUPPLIER') { router.push('/'); return }
+      if (!['SUPPLIER','AP_ADMIN'].includes(profile?.role ?? '')) { router.push('/'); return }
       setSupplierName((profile?.suppliers as any)?.name ?? data.user.email ?? '')
     })
   }, [])
