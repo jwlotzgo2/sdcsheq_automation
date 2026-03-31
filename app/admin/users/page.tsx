@@ -227,6 +227,7 @@ export default function UsersPage() {
   const [saving, setSaving]           = useState(false)
   const [saveMsg, setSaveMsg]         = useState('')
   const [showInvite, setShowInvite]   = useState(false)
+  const [allSuppliers, setAllSuppliers] = useState<any[]>([])
   const isMobile = useIsMobile()
   const [mounted, setMounted]         = useState(false)
 
@@ -270,7 +271,6 @@ export default function UsersPage() {
       setInviteMsg(`✓ Invite sent to ${inviteEmail}`)
       setInviteEmail(''); setShowInvite(false)
       fetchUsers()
-    supabase.from('suppliers').select('id, name').eq('is_active', true).order('name').then(({ data }) => setAllSuppliers(data ?? []))
     } else {
       setInviteMsg(`Error: ${data.error}`)
     }
