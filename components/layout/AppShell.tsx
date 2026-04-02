@@ -23,6 +23,19 @@ const PRIMARY_NAV = [
   { href: '/invoices',  label: 'Invoices', icon: '🗒', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
 ]
 
+const MORE_NAV_BASE = [
+  { href: '/duplicates',  label: 'Duplicates',  icon: '⚠️', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/suppliers',   label: 'Suppliers',   icon: '🏢', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/statements',  label: 'Statements',  icon: '📑', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/gl-codes',    label: 'GL Codes',    icon: '📒', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/xero-push',   label: 'Push to Xero',icon: '📤', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/expenses',    label: 'Expenses',    icon: '🧾', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/chat',        label: 'Team Chat',   icon: '💬', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/help',        label: 'Help',        icon: '❓', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/admin/users',    label: 'Users',    icon: '👥', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/admin/settings', label: 'Settings', icon: '⚙️', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
+]
+
 
 
 function useWindowWidth() {
@@ -167,6 +180,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {['APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/approve"   label="Approve Queue" icon="✅" badge={approveCount} />}
             {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/duplicates" label="Duplicates"   icon="⚠️" badge={duplicateCount} />}
             {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/suppliers"  label="Suppliers"    icon="🏢" />}
+            {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/statements" label="Statements"   icon="📑" />}
             {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/gl-codes"   label="GL Codes"     icon="📒" />}
             {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/xero-push"  label="Push to Xero" icon="📤" />}
             {['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/expenses"  label="Expenses"     icon="🧾" />}
