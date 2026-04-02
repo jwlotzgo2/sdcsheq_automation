@@ -216,7 +216,7 @@ export default function StatementsPage() {
                           href={`/statements/${s.id}`}
                           style={{ fontSize: '12px', color: AMBER, fontWeight: '600', textDecoration: 'none' }}
                         >
-                          View
+                          {s.status === 'EXTRACTED' ? 'Reconcile' : s.status === 'EXCEPTION' ? 'Review' : 'View'}
                         </Link>
                       )}
                     </td>
