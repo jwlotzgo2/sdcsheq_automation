@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import Link from 'next/link'
 import AppShell from '@/components/layout/AppShell'
 
 const AMBER  = '#E8960C'
@@ -62,7 +63,7 @@ export default function SuppliersPage() {
   const fetchData = async () => {
     setLoading(true)
     const [{ data: suppData }, { data: glData }, { data: invoiceData }] = await Promise.all([
-      supabase.from('suppliers').select('*, gl_codes(id, xero_account_code, name)').eq('is_active', true).order('name'),
+      supabase.from('suppliers').select('*, gl_codes(id, xero_account_code, name), supplier_statement_configs(id, trained_at, trained_by)').eq('is_active', true).order('name'),
       supabase.from('gl_codes').select('id, xero_account_code, name').eq('is_active', true).order('xero_account_code'),
       supabase.from('invoices').select('supplier_id, amount_incl, status, created_at').not('supplier_id', 'is', null),
     ])
@@ -148,6 +149,36 @@ export default function SuppliersPage() {
       {saveMsg && <div style={{ fontSize: '12px', color: OLIVE, fontWeight: '600' }}>✓ {saveMsg}</div>}
       <div style={{ marginTop: '12px', padding: '10px', backgroundColor: LIGHT, borderRadius: '6px', fontSize: '11px', color: MUTED, lineHeight: 1.5 }}>
         The default GL code is suggested automatically during OCR extraction for invoices from this supplier.
+      </div>
+      {/* Statement Config */}
+      <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: `1px solid ${BORDER}` }}>
+        <div style={{ fontSize: '11px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
+          Statement Config
+        </div>
+        {selected.supplier_statement_configs?.length > 0 ? (
+          <div style={{ fontSize: '13px', color: OLIVE, marginBottom: '10px' }}>
+            Configured {new Date(selected.supplier_statement_configs[0].trained_at).toLocaleDateString('en-ZA')}
+          </div>
+        ) : (
+          <div style={{ fontSize: '13px', color: MUTED, marginBottom: '10px' }}>
+            Not configured
+          </div>
+        )}
+        <Link
+          href={`/suppliers/${selected.id}/statement-config`}
+          style={{
+            display: 'inline-block',
+            fontSize: '12px',
+            color: '#E8960C',
+            fontWeight: '600',
+            textDecoration: 'none',
+            padding: '6px 12px',
+            border: '1px solid #E8960C',
+            borderRadius: '6px',
+          }}
+        >
+          {selected.supplier_statement_configs?.length > 0 ? 'Reconfigure' : 'Configure Statement'}
+        </Link>
       </div>
     </>
   )
