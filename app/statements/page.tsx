@@ -30,7 +30,12 @@ const fmt = (val: any) =>
 const fmtDate = (val: any) =>
   val ? new Date(val).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 
-interface Supplier { id: string; name: string }
+interface Supplier {
+  id: string
+  name: string
+  supplier_statement_configs?: { id: string; trained_at: string }[]
+}
+
 interface Statement {
   id: string
   supplier_id: string
@@ -64,10 +69,14 @@ export default function StatementsPage() {
         .select('id, supplier_id, status, statement_date, date_from, date_to, closing_balance, ingested_at, suppliers(name)')
         .order('ingested_at', { ascending: false })
         .limit(50),
-      supabase.from('suppliers').select('id, name').eq('is_active', true).order('name'),
+      supabase
+        .from('suppliers')
+        .select('id, name, supplier_statement_configs(id, trained_at)')
+        .eq('is_active', true)
+        .order('name'),
     ])
     setStatements((stmts as Statement[]) || [])
-    setSuppliers(sups || [])
+    setSuppliers((sups as Supplier[]) || [])
     setLoading(false)
   }, [supabase])
 
@@ -107,6 +116,17 @@ export default function StatementsPage() {
     }
   }
 
+  const handleDelete = async (statementId: string) => {
+    if (!confirm('Delete this statement and all its reconciliation data?')) return
+    try {
+      const res = await fetch(`/api/statements/${statementId}/delete`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Delete failed')
+      await load()
+    } catch {
+      setError('Failed to delete statement')
+    }
+  }
+
   const inputStyle: React.CSSProperties = {
     padding: '8px 10px',
     border: `1px solid ${BORDER}`,
@@ -122,7 +142,7 @@ export default function StatementsPage() {
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
           <h1 style={{ fontSize: '22px', fontWeight: '700', color: DARK, margin: 0 }}>
-            Supplier Statements
+            Supplier Reconciliation
           </h1>
 
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -133,9 +153,14 @@ export default function StatementsPage() {
               disabled={uploading}
             >
               <option value="">Select supplier...</option>
-              {suppliers.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
+              {suppliers.map(s => {
+                const hasConfig = (s.supplier_statement_configs?.length ?? 0) > 0
+                return (
+                  <option key={s.id} value={s.id}>
+                    {s.name}{hasConfig ? ' ✓' : ' (no config)'}
+                  </option>
+                )
+              })}
             </select>
 
             <input
@@ -174,8 +199,8 @@ export default function StatementsPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
             <thead>
               <tr style={{ borderBottom: `2px solid ${BORDER}`, backgroundColor: LIGHT }}>
-                {['Supplier', 'Statement Date', 'Period', 'Closing Balance', 'Status', 'Uploaded', ''].map(h => (
-                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: MUTED, fontWeight: '600', fontSize: '11px', textTransform: 'uppercase' as const, whiteSpace: 'nowrap' }}>
+                {['Supplier', 'Statement Date', 'Period', 'Closing Balance', 'Status', 'Uploaded', '', ''].map((h, i) => (
+                  <th key={i} style={{ padding: '10px 14px', textAlign: 'left', color: MUTED, fontWeight: '600', fontSize: '11px', textTransform: 'uppercase' as const, whiteSpace: 'nowrap' }}>
                     {h}
                   </th>
                 ))}
@@ -183,9 +208,9 @@ export default function StatementsPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: MUTED }}>Loading...</td></tr>
+                <tr><td colSpan={8} style={{ padding: '24px', textAlign: 'center', color: MUTED }}>Loading...</td></tr>
               ) : statements.length === 0 ? (
-                <tr><td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: MUTED }}>No statements yet. Upload one above.</td></tr>
+                <tr><td colSpan={8} style={{ padding: '24px', textAlign: 'center', color: MUTED }}>No statements yet. Upload one above.</td></tr>
               ) : statements.map(s => {
                 const colors = STATUS_COLORS[s.status] || STATUS_COLORS.INGESTED
                 return (
@@ -219,6 +244,18 @@ export default function StatementsPage() {
                           {s.status === 'EXTRACTED' ? 'Reconcile' : s.status === 'EXCEPTION' ? 'Review' : 'View'}
                         </Link>
                       )}
+                    </td>
+                    <td style={{ padding: '6px 10px' }}>
+                      <button
+                        onClick={() => handleDelete(s.id)}
+                        style={{
+                          background: 'none', border: 'none', color: '#9CA3AF',
+                          fontSize: '14px', cursor: 'pointer', padding: '2px 6px',
+                        }}
+                        title="Delete statement"
+                      >
+                        ×
+                      </button>
                     </td>
                   </tr>
                 )
