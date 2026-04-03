@@ -26,7 +26,7 @@ export async function getSupplierTransactions(
       `Invoices?where=Type=="ACCPAY" AND Contact.ContactID==guid("${xeroContactId}") AND Date>=DateTime(${dateFrom}T00:00:00) AND Date<=DateTime(${dateTo}T23:59:59)&order=Date`
     ),
     xeroGet(
-      `CreditNotes?where=Type=="ACCPAYCREDIT" AND Contact.ContactID==guid("${xeroContactId}") AND Date>=DateTime(${dateFrom}T00:00:00) AND Date<=DateTime(${dateTo}T23:59:59)`
+      `CreditNotes?where=Contact.ContactID==guid("${xeroContactId}") AND Date>=DateTime(${dateFrom}T00:00:00) AND Date<=DateTime(${dateTo}T23:59:59)`
     ),
   ])
 
