@@ -26,7 +26,7 @@ const PRIMARY_NAV = [
 const MORE_NAV_BASE = [
   { href: '/duplicates',  label: 'Duplicates',  icon: '⚠️', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/suppliers',   label: 'Suppliers',   icon: '🏢', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/statements',  label: 'Statements',  icon: '📑', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/statements',  label: 'Reconciliation', icon: '📑', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/gl-codes',    label: 'GL Codes',    icon: '📒', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/xero-push',   label: 'Push to Xero',icon: '📤', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/expenses',    label: 'Expenses',    icon: '🧾', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
@@ -180,7 +180,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {['APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/approve"   label="Approve Queue" icon="✅" badge={approveCount} />}
             {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/duplicates" label="Duplicates"   icon="⚠️" badge={duplicateCount} />}
             {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/suppliers"  label="Suppliers"    icon="🏢" />}
-            {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/statements" label="Statements"   icon="📑" />}
+            {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/statements" label="Reconciliation" icon="📑" />}
             {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/gl-codes"   label="GL Codes"     icon="📒" />}
             {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/xero-push"  label="Push to Xero" icon="📤" />}
             {['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/expenses"  label="Expenses"     icon="🧾" />}
