@@ -163,7 +163,7 @@ export async function extractStatement(statementId: string): Promise<void> {
   let extracted: ExtractedStatement
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5-20241022',
+      model: 'claude-sonnet-4-5',
       max_tokens: 4000,
       messages: [
         {
