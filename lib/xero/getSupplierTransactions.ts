@@ -21,17 +21,23 @@ export async function getSupplierTransactions(
 ): Promise<XeroTransaction[]> {
   const transactions: XeroTransaction[] = []
 
-  // Fetch bills — Invoices endpoint supports Contact.ContactID filter
+  // Fetch bills — URL-encode the where clause to avoid query string parsing issues
+  const billsWhere = encodeURIComponent(
+    `Type=="ACCPAY" AND Contact.ContactID==guid("${xeroContactId}") AND Date>=DateTime(${dateFrom}T00:00:00) AND Date<=DateTime(${dateTo}T23:59:59)`
+  )
   const billsData = await xeroGet(
-    `Invoices?where=Type=="ACCPAY" AND Contact.ContactID==guid("${xeroContactId}") AND Date>=DateTime(${dateFrom}T00:00:00) AND Date<=DateTime(${dateTo}T23:59:59)&order=Date`
+    `Invoices?where=${billsWhere}&order=Date`
   )
 
   // Fetch credit notes — CreditNotes endpoint doesn't support Contact.ContactID filter,
   // so we fetch by date range and filter in JS
   let creditNotesData: any = { CreditNotes: [] }
   try {
+    const cnWhere = encodeURIComponent(
+      `Date>=DateTime(${dateFrom}T00:00:00) AND Date<=DateTime(${dateTo}T23:59:59)`
+    )
     const allCN = await xeroGet(
-      `CreditNotes?where=Date>=DateTime(${dateFrom}T00:00:00) AND Date<=DateTime(${dateTo}T23:59:59)`
+      `CreditNotes?where=${cnWhere}`
     )
     // Filter to this supplier client-side
     creditNotesData = {
