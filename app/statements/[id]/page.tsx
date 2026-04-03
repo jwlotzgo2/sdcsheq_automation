@@ -76,12 +76,14 @@ interface StatementLine {
 interface ReconException {
   id: string
   statement_id: string
+  statement_line_id: string | null
   exception_type: string
-  reference: string | null
-  amount: number | null
+  xero_transaction_id: string | null
   xero_reference: string | null
   xero_amount: number | null
+  notes: string | null
   resolution: string | null
+  resolved_by: string | null
   resolved_at: string | null
   created_at: string
 }
@@ -152,7 +154,14 @@ export default function StatementDetailPage() {
       ])
 
       setStatement(stmt as Statement)
-      setLines((lineData as StatementLine[]) || [])
+      // PostgREST may return recon_matches as object (unique constraint) or array — normalize
+      const normalizedLines = (lineData || []).map((line: any) => ({
+        ...line,
+        recon_matches: line.recon_matches
+          ? Array.isArray(line.recon_matches) ? line.recon_matches : [line.recon_matches]
+          : [],
+      }))
+      setLines(normalizedLines as StatementLine[])
       setExceptions((excData as ReconException[]) || [])
       setPdfUrl(urlData?.signedUrl || null)
     } catch (err: unknown) {
@@ -471,14 +480,7 @@ export default function StatementDetailPage() {
                     const isResolved = !!exc.resolved_at
                     const isResolving = resolvingId === exc.id
 
-                    let label = ''
-                    if (exc.exception_type === 'MISSING_IN_XERO') {
-                      label = `Statement line ${exc.reference || '—'} (${fmt(exc.amount)}) — not found in Xero`
-                    } else if (exc.exception_type === 'MISSING_ON_STATEMENT') {
-                      label = `Xero ${exc.xero_reference || '—'} (${fmt(exc.xero_amount)}) — not on statement`
-                    } else {
-                      label = exc.exception_type
-                    }
+                    const label = exc.notes || exc.exception_type
 
                     return (
                       <div
