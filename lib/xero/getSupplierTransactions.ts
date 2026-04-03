@@ -29,7 +29,7 @@ export async function getSupplierTransactions(
 
   // Xero where syntax: use Guid(), DateTime(y,m,d), && for AND
   const billsWhere = encodeURIComponent(
-    `Type=="ACCPAY"&&ContactID==Guid("${xeroContactId}")&&Date>=${toXeroDateTime(dateFrom)}&&Date<=${toXeroDateTime(dateTo)}`
+    `Type=="ACCPAY"&&Contact.ContactID==Guid("${xeroContactId}")&&Date>=${toXeroDateTime(dateFrom)}&&Date<=${toXeroDateTime(dateTo)}`
   )
   const billsData = await xeroGet(
     `Invoices?where=${billsWhere}&order=Date`
