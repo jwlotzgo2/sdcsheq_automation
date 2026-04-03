@@ -1,7 +1,7 @@
 // app/statements/[id]/page.tsx
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
 import { useParams } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import AppShell from '@/components/layout/AppShell'
@@ -28,9 +28,10 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
 }
 
 const MATCH_COLORS: Record<string, { bg: string; text: string }> = {
-  EXACT:  { bg: '#D1FAE5', text: '#065F46' },
-  FUZZY:  { bg: '#DBEAFE', text: '#1E40AF' },
-  MANUAL: { bg: '#FEF3C7', text: '#92400E' },
+  EXACT:     { bg: '#D1FAE5', text: '#065F46' },
+  FUZZY:     { bg: '#DBEAFE', text: '#1E40AF' },
+  MANUAL:    { bg: '#FEF3C7', text: '#92400E' },
+  UNMATCHED: { bg: '#FEE2E2', text: '#991B1B' },
 }
 
 const XERO_TYPE_COLORS: Record<string, { bg: string; text: string }> = {
@@ -249,30 +250,23 @@ export default function StatementDetailPage() {
   const missingOnStatement = exceptions.filter(e => e.exception_type === 'MISSING_ON_STATEMENT')
   const otherExceptions = exceptions.filter(e => e.exception_type !== 'MISSING_IN_XERO' && e.exception_type !== 'MISSING_ON_STATEMENT')
 
-  // Shared styles
-  const cardStyle: React.CSSProperties = {
-    backgroundColor: WHITE,
-    border: `1px solid ${BORDER}`,
-    borderRadius: '10px',
-    padding: '20px 24px',
-    marginBottom: '20px',
-  }
-
-  const thStyle: React.CSSProperties = {
-    padding: '10px 12px',
+  // Compact shared styles
+  const compactTh: React.CSSProperties = {
+    padding: '6px 10px',
     textAlign: 'left',
     color: MUTED,
     fontWeight: '600',
-    fontSize: '11px',
+    fontSize: '10px',
     textTransform: 'uppercase',
     whiteSpace: 'nowrap',
     borderBottom: `2px solid ${BORDER}`,
+    backgroundColor: LIGHT,
   }
 
-  const tdStyle: React.CSSProperties = {
-    padding: '10px 12px',
+  const compactTd: React.CSSProperties = {
+    padding: '6px 10px',
     color: DARK,
-    fontSize: '13px',
+    fontSize: '12px',
     borderBottom: `1px solid ${BORDER}`,
   }
 
@@ -283,24 +277,24 @@ export default function StatementDetailPage() {
 
     if (isResolved) {
       return (
-        <span style={{ fontSize: '12px', color: MUTED }}>Resolved: {exc.resolution}</span>
+        <span style={{ fontSize: '11px', color: MUTED, textDecoration: 'line-through' }}>Resolved: {exc.resolution}</span>
       )
     }
 
     if (isResolving) {
       return (
-        <div style={{ display: 'flex', gap: '8px', marginTop: '8px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '6px', marginTop: '6px', alignItems: 'center' }}>
           <input
             type="text"
             value={resolution}
             onChange={e => setResolution(e.target.value)}
-            placeholder="Enter resolution notes..."
+            placeholder="Resolution notes..."
             style={{
               flex: 1,
-              padding: '7px 10px',
+              padding: '5px 8px',
               border: `1px solid ${BORDER}`,
-              borderRadius: '6px',
-              fontSize: '13px',
+              borderRadius: '4px',
+              fontSize: '12px',
               color: DARK,
               outline: 'none',
             }}
@@ -311,12 +305,12 @@ export default function StatementDetailPage() {
             onClick={() => handleResolveException(exc.id)}
             disabled={!resolution.trim()}
             style={{
-              padding: '7px 14px',
-              borderRadius: '6px',
+              padding: '5px 10px',
+              borderRadius: '4px',
               border: 'none',
               backgroundColor: resolution.trim() ? AMBER : '#C8B89A',
               color: WHITE,
-              fontSize: '13px',
+              fontSize: '11px',
               fontWeight: '700',
               cursor: resolution.trim() ? 'pointer' : 'default',
               whiteSpace: 'nowrap',
@@ -327,12 +321,12 @@ export default function StatementDetailPage() {
           <button
             onClick={() => { setResolvingId(null); setResolution('') }}
             style={{
-              padding: '7px 12px',
-              borderRadius: '6px',
+              padding: '5px 8px',
+              borderRadius: '4px',
               border: `1px solid ${BORDER}`,
               backgroundColor: WHITE,
               color: MUTED,
-              fontSize: '13px',
+              fontSize: '11px',
               cursor: 'pointer',
             }}
           >
@@ -346,12 +340,12 @@ export default function StatementDetailPage() {
       <button
         onClick={() => { setResolvingId(exc.id); setResolution('') }}
         style={{
-          padding: '5px 12px',
-          borderRadius: '6px',
+          padding: '3px 10px',
+          borderRadius: '4px',
           border: `1px solid ${BORDER}`,
           backgroundColor: WHITE,
           color: DARK,
-          fontSize: '12px',
+          fontSize: '11px',
           fontWeight: '600',
           cursor: 'pointer',
           whiteSpace: 'nowrap',
@@ -359,95 +353,6 @@ export default function StatementDetailPage() {
       >
         Resolve
       </button>
-    )
-  }
-
-  // Render an exception group card
-  const renderExceptionGroup = (
-    title: string,
-    instruction: string,
-    borderColor: string,
-    items: ReconException[],
-  ) => {
-    if (items.length === 0) return null
-
-    return (
-      <div
-        style={{
-          ...cardStyle,
-          borderLeft: `4px solid ${borderColor}`,
-          borderRadius: '0 10px 10px 0',
-        }}
-      >
-        <h3 style={{ fontSize: '14px', fontWeight: '700', color: DARK, margin: '0 0 6px' }}>
-          {title}
-        </h3>
-        <p style={{ fontSize: '12px', color: MUTED, margin: '0 0 14px', lineHeight: '1.5' }}>
-          {instruction}
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {items.map(exc => {
-            const isResolved = !!exc.resolved_at
-            // For MISSING_IN_XERO, look up the statement line
-            const excLine = exc.statement_line_id
-              ? lines.find(l => l.id === exc.statement_line_id)
-              : null
-
-            const ref = exc.exception_type === 'MISSING_IN_XERO'
-              ? (excLine?.reference || exc.xero_reference || '—')
-              : (exc.xero_reference || '—')
-            const desc = exc.exception_type === 'MISSING_IN_XERO'
-              ? (excLine?.description || exc.notes || '')
-              : (exc.notes || '')
-            const amount = exc.exception_type === 'MISSING_IN_XERO'
-              ? (excLine ? (excLine.debit_amount || excLine.credit_amount) : exc.xero_amount)
-              : exc.xero_amount
-
-            return (
-              <div
-                key={exc.id}
-                style={{
-                  padding: '10px 14px',
-                  backgroundColor: isResolved ? LIGHT : WHITE,
-                  border: `1px solid ${BORDER}`,
-                  borderRadius: '6px',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{
-                      display: 'flex',
-                      gap: '12px',
-                      alignItems: 'baseline',
-                      textDecoration: isResolved ? 'line-through' : 'none',
-                      color: isResolved ? MUTED : DARK,
-                    }}>
-                      <span style={{ fontSize: '13px', fontWeight: '600' }}>{ref}</span>
-                      {desc && <span style={{ fontSize: '12px', color: MUTED }}>{desc}</span>}
-                      <span style={{ fontSize: '13px', fontWeight: '600', marginLeft: 'auto', whiteSpace: 'nowrap' }}>
-                        {fmt(amount)}
-                      </span>
-                    </div>
-                    {isResolved && exc.resolution && (
-                      <div style={{ marginTop: '4px' }}>
-                        {renderResolveUI(exc)}
-                      </div>
-                    )}
-                    {!isResolved && resolvingId === exc.id && (
-                      <div>{renderResolveUI(exc)}</div>
-                    )}
-                  </div>
-                  {!isResolved && resolvingId !== exc.id && (
-                    <div style={{ flexShrink: 0 }}>
-                      {renderResolveUI(exc)}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
     )
   }
 
@@ -474,93 +379,123 @@ export default function StatementDetailPage() {
 
   return (
     <AppShell>
-      <div style={{ padding: '28px 32px', height: 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '20px 28px', height: 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column' }}>
 
-        {/* Two-column layout: left=content, right=PDF */}
+        {/* Header Row */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <Link
+              href="/statements"
+              style={{ fontSize: '12px', color: MUTED, textDecoration: 'none', whiteSpace: 'nowrap' }}
+            >
+              ← Back
+            </Link>
+            <h1 style={{ fontSize: '20px', fontWeight: '700', color: DARK, margin: 0 }}>
+              {statement?.suppliers?.name || '—'}
+            </h1>
+            {statement && (
+              <span style={{
+                display: 'inline-block', padding: '2px 7px', borderRadius: '4px',
+                fontSize: '10px', fontWeight: '700',
+                backgroundColor: statusColors.bg, color: statusColors.text,
+              }}>
+                {statement.status}
+              </span>
+            )}
+            {statement?.statement_date && (
+              <span style={{ fontSize: '12px', color: MUTED }}>{fmtDate(statement.statement_date)}</span>
+            )}
+          </div>
+          {statement && canReconcile && (
+            <div>
+              {hasXero ? (
+                <button
+                  onClick={handleReconcile}
+                  disabled={reconciling}
+                  style={{
+                    padding: '7px 18px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    backgroundColor: reconciling ? '#C8B89A' : AMBER,
+                    color: WHITE,
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    cursor: reconciling ? 'default' : 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {reconciling ? 'Reconciling...' : 'Run Reconciliation'}
+                </button>
+              ) : (
+                <span style={{ fontSize: '11px', color: MUTED }}>Supplier not linked to Xero</span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Error */}
+        {error && (
+          <p style={{ color: RED, fontSize: '12px', margin: '0 0 10px' }}>{error}</p>
+        )}
+
+        {/* Two-column layout */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-          gap: '24px',
+          gridTemplateColumns: isMobile ? '1fr' : '1fr 380px',
+          gap: '20px',
           flex: 1,
           minHeight: 0,
         }}>
 
-          {/* Left column — scrollable content */}
+          {/* Left column */}
           <div style={{ overflowY: 'auto', paddingRight: '4px' }}>
 
-            {/* 1. Header */}
-            <div style={{ marginBottom: '20px' }}>
-              <Link
-                href="/statements"
-                style={{ fontSize: '13px', color: MUTED, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px', marginBottom: '12px' }}
-              >
-                ← Back to Statements
-              </Link>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                <h1 style={{ fontSize: '22px', fontWeight: '700', color: DARK, margin: 0 }}>
-                  {statement?.suppliers?.name || '—'}
-                </h1>
-                {statement && (
-                  <span style={{
-                    display: 'inline-block', padding: '3px 8px', borderRadius: '4px',
-                    fontSize: '11px', fontWeight: '700',
-                    backgroundColor: statusColors.bg, color: statusColors.text,
-                  }}>
-                    {statement.status}
-                  </span>
-                )}
-                {statement?.statement_date && (
-                  <span style={{ fontSize: '13px', color: MUTED }}>{fmtDate(statement.statement_date)}</span>
-                )}
-              </div>
-            </div>
-
-            {error && (
-              <p style={{ color: RED, fontSize: '13px', marginBottom: '16px' }}>{error}</p>
-            )}
-
-            {/* 2. Balance Comparison Card */}
-            <div style={cardStyle}>
-              <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-                <div style={{ textAlign: 'center', flex: '1 1 120px' }}>
-                  <div style={{ fontSize: '11px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', marginBottom: '6px' }}>
+            {/* Balance Comparison — slim card */}
+            <div style={{
+              backgroundColor: WHITE,
+              border: `1px solid ${BORDER}`,
+              borderRadius: '8px',
+              padding: '14px 20px',
+              marginBottom: '16px',
+            }}>
+              <div style={{ display: 'flex', gap: '16px', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                <div style={{ textAlign: 'center', flex: '1 1 100px' }}>
+                  <div style={{ fontSize: '10px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', marginBottom: '3px' }}>
                     Supplier Says
                   </div>
-                  <div style={{ fontSize: '24px', fontWeight: '700', color: DARK }}>
+                  <div style={{ fontSize: '16px', fontWeight: '700', color: DARK }}>
                     {fmt(supplierBalance)}
                   </div>
                 </div>
-                <div style={{ textAlign: 'center', flex: '1 1 120px' }}>
-                  <div style={{ fontSize: '11px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', marginBottom: '6px' }}>
+                <div style={{ textAlign: 'center', flex: '1 1 100px' }}>
+                  <div style={{ fontSize: '10px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', marginBottom: '3px' }}>
                     Xero Says
                   </div>
-                  <div style={{ fontSize: '24px', fontWeight: '700', color: DARK }}>
+                  <div style={{ fontSize: '16px', fontWeight: '700', color: DARK }}>
                     {xeroTxns.length > 0 ? fmt(ourBalance) : '—'}
                   </div>
                 </div>
-                <div style={{ textAlign: 'center', flex: '1 1 120px' }}>
-                  <div style={{ fontSize: '11px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', marginBottom: '6px' }}>
+                <div style={{ textAlign: 'center', flex: '1 1 100px' }}>
+                  <div style={{ fontSize: '10px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', marginBottom: '3px' }}>
                     Difference
                   </div>
                   <div style={{
-                    fontSize: '24px', fontWeight: '700',
+                    fontSize: '16px', fontWeight: '700',
                     color: xeroTxns.length > 0 ? (difference === 0 ? '#065F46' : RED) : MUTED,
                   }}>
                     {xeroTxns.length > 0 ? fmt(Math.abs(difference)) : '—'}
                   </div>
                 </div>
               </div>
-
-              {/* Stats line */}
               <div style={{
-                fontSize: '12px', color: MUTED,
-                borderTop: `1px solid ${BORDER}`, paddingTop: '12px', marginTop: '14px',
-                display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px',
+                fontSize: '11px', color: MUTED,
+                borderTop: `1px solid ${BORDER}`, paddingTop: '8px', marginTop: '10px',
+                display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px',
               }}>
                 <span>
-                  <strong style={{ color: DARK }}>{matchedCount}</strong> of <strong style={{ color: DARK }}>{lines.length}</strong> lines matched
+                  <strong style={{ color: DARK }}>{matchedCount}</strong> of <strong style={{ color: DARK }}>{lines.length}</strong> matched
                   {unresolvedExceptions.length > 0 && (
-                    <> | <strong style={{ color: RED }}>{unresolvedExceptions.length}</strong> {unresolvedExceptions.length === 1 ? 'exception' : 'exceptions'}</>
+                    <> | <strong style={{ color: RED }}>{unresolvedExceptions.length}</strong> exceptions</>
                   )}
                 </span>
                 {statement?.date_from && statement?.date_to && (
@@ -569,167 +504,26 @@ export default function StatementDetailPage() {
               </div>
             </div>
 
-            {/* 3. Run Reconciliation Button */}
-            {statement && canReconcile && (
-              <div style={{ marginBottom: '20px' }}>
-                {hasXero ? (
-                  <button
-                    onClick={handleReconcile}
-                    disabled={reconciling}
-                    style={{
-                      width: '100%',
-                      padding: '11px',
-                      borderRadius: '6px',
-                      border: 'none',
-                      backgroundColor: reconciling ? '#C8B89A' : AMBER,
-                      color: WHITE,
-                      fontSize: '14px',
-                      fontWeight: '700',
-                      cursor: reconciling ? 'default' : 'pointer',
-                    }}
-                  >
-                    {reconciling ? 'Reconciling...' : 'Run Reconciliation'}
-                  </button>
-                ) : (
-                  <div>
-                    <button
-                      disabled
-                      style={{
-                        width: '100%',
-                        padding: '11px',
-                        borderRadius: '6px',
-                        border: 'none',
-                        backgroundColor: '#C8B89A',
-                        color: WHITE,
-                        fontSize: '14px',
-                        fontWeight: '700',
-                        cursor: 'not-allowed',
-                      }}
-                    >
-                      Run Reconciliation
-                    </button>
-                    <p style={{ fontSize: '11px', color: MUTED, marginTop: '4px', textAlign: 'center' }}>
-                      Supplier not linked to Xero
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* 4. Exceptions Section */}
-            {exceptions.length > 0 && (
-              <div style={{ marginBottom: '4px' }}>
-                {renderExceptionGroup(
-                  `Request from Supplier (${missingInXero.length})`,
-                  "These items appear on the supplier's statement but we can't find them in Xero. Request the original invoices or documents from the supplier.",
-                  AMBER,
-                  missingInXero,
-                )}
-                {renderExceptionGroup(
-                  `Send to Supplier (${missingOnStatement.length})`,
-                  "These transactions are in our Xero records but don't appear on the supplier's statement. Send these documents to the supplier for their records.",
-                  BLUE,
-                  missingOnStatement,
-                )}
-                {otherExceptions.length > 0 && renderExceptionGroup(
-                  `Other Exceptions (${otherExceptions.length})`,
-                  'These exceptions require manual review to resolve discrepancies between statement and Xero records.',
-                  MUTED,
-                  otherExceptions,
-                )}
-              </div>
-            )}
-
-            {/* 5. Matched Lines Table */}
-            {matchedLines.length > 0 && (
-              <div style={{ marginBottom: '24px' }}>
-                <h2 style={{ fontSize: '15px', fontWeight: '700', color: DARK, marginBottom: '12px' }}>
-                  Matched Lines ({matchedCount})
-                </h2>
-                <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: '10px', overflow: 'hidden' }}>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                      <thead>
-                        <tr style={{ backgroundColor: LIGHT }}>
-                          {['Date', 'Statement Ref', 'Description', 'Statement Amount', 'Match', 'Xero Ref', 'Xero Amount', 'Variance'].map(h => (
-                            <th key={h} style={thStyle}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {matchedLines.map(line => {
-                          const match = line.recon_matches[0]
-                          const stmtAmount = line.debit_amount != null ? line.debit_amount : line.credit_amount
-                          const colors = MATCH_COLORS[match.match_type] || MATCH_COLORS.MANUAL
-
-                          let matchLabel = match.match_type
-                          if (match.match_type === 'FUZZY' && match.match_confidence != null) {
-                            matchLabel = `FUZZY ${Math.round(match.match_confidence * 100)}%`
-                          }
-
-                          const variance = match.variance_amount
-                          const varianceColor = variance != null && variance !== 0 ? RED : '#065F46'
-
-                          return (
-                            <tr key={line.id}>
-                              <td style={tdStyle}>{fmtDate(line.line_date)}</td>
-                              <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{line.reference || '—'}</td>
-                              <td style={{ ...tdStyle, maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {line.description || '—'}
-                              </td>
-                              <td style={{ ...tdStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>{fmt(stmtAmount)}</td>
-                              <td style={tdStyle}>
-                                <span style={{
-                                  display: 'inline-block', padding: '2px 7px', borderRadius: '4px',
-                                  fontSize: '11px', fontWeight: '700', whiteSpace: 'nowrap',
-                                  backgroundColor: colors.bg, color: colors.text,
-                                }}>
-                                  {matchLabel}
-                                </span>
-                              </td>
-                              <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{match.xero_reference || '—'}</td>
-                              <td style={{ ...tdStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>{fmt(match.xero_amount)}</td>
-                              <td style={{ ...tdStyle, textAlign: 'right', whiteSpace: 'nowrap', color: varianceColor, fontWeight: '600' }}>
-                                {fmt(variance)}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* 6. Xero Transactions Table */}
-            <div style={{ marginBottom: '24px' }}>
-              <div style={{ marginBottom: '12px' }}>
-                <h2 style={{ fontSize: '15px', fontWeight: '700', color: DARK, margin: '0 0 2px' }}>
-                  Xero Transactions ({xeroTxns.length})
-                </h2>
-                <p style={{ fontSize: '12px', color: MUTED, margin: 0 }}>
-                  All bills, payments, and credit notes from Xero for this period
-                </p>
-              </div>
+            {/* Xero Transactions Table */}
+            <div style={{ marginBottom: '16px' }}>
+              <h2 style={{ fontSize: '13px', fontWeight: '700', color: DARK, margin: '0 0 8px' }}>
+                Xero Transactions ({xeroTxns.length})
+              </h2>
               {xeroTxns.length === 0 ? (
                 <div style={{
-                  ...cardStyle,
-                  textAlign: 'center',
-                  color: MUTED,
-                  fontSize: '13px',
-                  padding: '28px 24px',
+                  backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: '8px',
+                  textAlign: 'center', color: MUTED, fontSize: '12px', padding: '20px',
                 }}>
                   Run reconciliation to fetch Xero data
                 </div>
               ) : (
-                <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: '10px', overflow: 'hidden' }}>
+                <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: '8px', overflow: 'hidden' }}>
                   <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead>
-                        <tr style={{ backgroundColor: LIGHT }}>
+                        <tr>
                           {['Date', 'Reference', 'Type', 'Amount', 'Status'].map(h => (
-                            <th key={h} style={thStyle}>{h}</th>
+                            <th key={h} style={compactTh}>{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -738,19 +532,19 @@ export default function StatementDetailPage() {
                           const typeColors = XERO_TYPE_COLORS[txn.type] || { bg: '#F3F4F6', text: '#374151' }
                           return (
                             <tr key={txn.xero_id || i}>
-                              <td style={tdStyle}>{fmtDate(txn.date)}</td>
-                              <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{txn.reference || '—'}</td>
-                              <td style={tdStyle}>
+                              <td style={compactTd}>{fmtDate(txn.date)}</td>
+                              <td style={{ ...compactTd, whiteSpace: 'nowrap' }}>{txn.reference || '—'}</td>
+                              <td style={compactTd}>
                                 <span style={{
-                                  display: 'inline-block', padding: '2px 7px', borderRadius: '4px',
-                                  fontSize: '11px', fontWeight: '700',
+                                  display: 'inline-block', padding: '1px 6px', borderRadius: '3px',
+                                  fontSize: '10px', fontWeight: '700',
                                   backgroundColor: typeColors.bg, color: typeColors.text,
                                 }}>
                                   {txn.type}
                                 </span>
                               </td>
-                              <td style={{ ...tdStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>{fmt(txn.amount)}</td>
-                              <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{txn.status || '—'}</td>
+                              <td style={{ ...compactTd, textAlign: 'right', whiteSpace: 'nowrap' }}>{fmt(txn.amount)}</td>
+                              <td style={{ ...compactTd, whiteSpace: 'nowrap' }}>{txn.status || '—'}</td>
                             </tr>
                           )
                         })}
@@ -761,6 +555,264 @@ export default function StatementDetailPage() {
               )}
             </div>
 
+            {/* Statement Lines Table */}
+            <div style={{ marginBottom: '16px' }}>
+              <h2 style={{ fontSize: '13px', fontWeight: '700', color: DARK, margin: '0 0 8px' }}>
+                Statement Lines ({lines.length})
+              </h2>
+              {lines.length === 0 ? (
+                <div style={{
+                  backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: '8px',
+                  textAlign: 'center', color: MUTED, fontSize: '12px', padding: '20px',
+                }}>
+                  No statement lines extracted
+                </div>
+              ) : (
+                <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: '8px', overflow: 'hidden' }}>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          {['Date', 'Ref', 'Description', 'Debit', 'Credit', 'Type', 'Match'].map(h => (
+                            <th key={h} style={compactTh}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lines.map(line => {
+                          const match = line.recon_matches.length > 0 ? line.recon_matches[0] : null
+                          const hasMatch = !!match
+
+                          let matchLabel = 'UNMATCHED'
+                          let matchColors = MATCH_COLORS.UNMATCHED
+                          if (match) {
+                            matchLabel = match.match_type
+                            matchColors = MATCH_COLORS[match.match_type] || MATCH_COLORS.MANUAL
+                            if (match.match_type === 'FUZZY' && match.match_confidence != null) {
+                              matchLabel = `FUZZY ${Math.round(match.match_confidence * 100)}%`
+                            }
+                          }
+
+                          return (
+                            <Fragment key={line.id}>
+                              <tr>
+                                <td style={compactTd}>{fmtDate(line.line_date)}</td>
+                                <td style={{ ...compactTd, whiteSpace: 'nowrap' }}>{line.reference || '—'}</td>
+                                <td style={{ ...compactTd, maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {line.description || '—'}
+                                </td>
+                                <td style={{ ...compactTd, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                  {line.debit_amount != null ? fmt(line.debit_amount) : '—'}
+                                </td>
+                                <td style={{ ...compactTd, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                  {line.credit_amount != null ? fmt(line.credit_amount) : '—'}
+                                </td>
+                                <td style={compactTd}>
+                                  {line.line_type && (
+                                    <span style={{ fontSize: '10px', color: MUTED }}>{line.line_type}</span>
+                                  )}
+                                </td>
+                                <td style={compactTd}>
+                                  <span style={{
+                                    display: 'inline-block', padding: '1px 6px', borderRadius: '3px',
+                                    fontSize: '10px', fontWeight: '700', whiteSpace: 'nowrap',
+                                    backgroundColor: matchColors.bg, color: matchColors.text,
+                                  }}>
+                                    {matchLabel}
+                                  </span>
+                                </td>
+                              </tr>
+                              {hasMatch && (
+                                <tr>
+                                  <td colSpan={7} style={{
+                                    padding: '3px 10px 5px 28px',
+                                    backgroundColor: LIGHT,
+                                    fontSize: '11px',
+                                    color: MUTED,
+                                    borderBottom: `1px solid ${BORDER}`,
+                                  }}>
+                                    Xero: <strong style={{ color: DARK }}>{match!.xero_reference || '—'}</strong>
+                                    {' '}| {fmt(match!.xero_amount)}
+                                    {match!.variance_amount != null && match!.variance_amount !== 0 && (
+                                      <span style={{ color: RED, marginLeft: '8px' }}>
+                                        variance {fmt(match!.variance_amount)}
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Reconciliation Summary */}
+            <div style={{ marginBottom: '16px' }}>
+              <h2 style={{ fontSize: '13px', fontWeight: '700', color: DARK, margin: '0 0 8px' }}>
+                Reconciliation Summary
+              </h2>
+              <div style={{
+                backgroundColor: WHITE,
+                border: `1px solid ${BORDER}`,
+                borderRadius: '8px',
+                padding: '16px 18px',
+              }}>
+                {exceptions.length === 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{
+                      display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#065F46',
+                    }} />
+                    <span style={{ fontSize: '13px', fontWeight: '600', color: '#065F46' }}>All lines reconciled</span>
+                  </div>
+                )}
+
+                {/* MISSING_IN_XERO group */}
+                {missingInXero.length > 0 && (
+                  <div style={{ marginBottom: missingOnStatement.length > 0 || otherExceptions.length > 0 ? '16px' : 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                      <span style={{
+                        display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: AMBER,
+                      }} />
+                      <span style={{ fontSize: '12px', fontWeight: '700', color: DARK }}>Request from Supplier</span>
+                    </div>
+                    <p style={{ fontSize: '11px', color: MUTED, margin: '0 0 8px', lineHeight: '1.4' }}>
+                      These items are on the supplier's statement but not in our Xero. Request the original documents.
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {missingInXero.map(exc => {
+                        const isResolved = !!exc.resolved_at
+                        const excLine = exc.statement_line_id ? lines.find(l => l.id === exc.statement_line_id) : null
+                        const ref = excLine?.reference || exc.xero_reference || '—'
+                        const desc = excLine?.description || exc.notes || ''
+                        const amount = excLine ? (excLine.debit_amount || excLine.credit_amount) : exc.xero_amount
+
+                        return (
+                          <div key={exc.id} style={{
+                            padding: '6px 10px',
+                            backgroundColor: isResolved ? LIGHT : WHITE,
+                            border: `1px solid ${BORDER}`,
+                            borderRadius: '4px',
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                              <div style={{
+                                display: 'flex', gap: '8px', alignItems: 'baseline', flex: 1,
+                                textDecoration: isResolved ? 'line-through' : 'none',
+                                color: isResolved ? MUTED : DARK,
+                                fontSize: '12px',
+                              }}>
+                                <span style={{ fontWeight: '600' }}>{ref}</span>
+                                {desc && (
+                                  <span style={{ color: MUTED, maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}>
+                                    {desc}
+                                  </span>
+                                )}
+                                <span style={{ fontWeight: '600', marginLeft: 'auto', whiteSpace: 'nowrap' }}>{fmt(amount)}</span>
+                              </div>
+                              {!isResolved && resolvingId !== exc.id && (
+                                <div style={{ flexShrink: 0 }}>{renderResolveUI(exc)}</div>
+                              )}
+                            </div>
+                            {isResolved && <div style={{ marginTop: '2px' }}>{renderResolveUI(exc)}</div>}
+                            {!isResolved && resolvingId === exc.id && <div>{renderResolveUI(exc)}</div>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* MISSING_ON_STATEMENT group */}
+                {missingOnStatement.length > 0 && (
+                  <div style={{ marginBottom: otherExceptions.length > 0 ? '16px' : 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                      <span style={{
+                        display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: BLUE,
+                      }} />
+                      <span style={{ fontSize: '12px', fontWeight: '700', color: DARK }}>Send to Supplier</span>
+                    </div>
+                    <p style={{ fontSize: '11px', color: MUTED, margin: '0 0 8px', lineHeight: '1.4' }}>
+                      These transactions are in our Xero but not on the supplier's statement. Send these documents to the supplier.
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {missingOnStatement.map(exc => {
+                        const isResolved = !!exc.resolved_at
+
+                        return (
+                          <div key={exc.id} style={{
+                            padding: '6px 10px',
+                            backgroundColor: isResolved ? LIGHT : WHITE,
+                            border: `1px solid ${BORDER}`,
+                            borderRadius: '4px',
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                              <div style={{
+                                display: 'flex', gap: '8px', alignItems: 'baseline', flex: 1,
+                                textDecoration: isResolved ? 'line-through' : 'none',
+                                color: isResolved ? MUTED : DARK,
+                                fontSize: '12px',
+                              }}>
+                                <span style={{ fontWeight: '600' }}>{exc.xero_reference || '—'}</span>
+                                <span style={{ fontWeight: '600', marginLeft: 'auto', whiteSpace: 'nowrap' }}>{fmt(exc.xero_amount)}</span>
+                              </div>
+                              {!isResolved && resolvingId !== exc.id && (
+                                <div style={{ flexShrink: 0 }}>{renderResolveUI(exc)}</div>
+                              )}
+                            </div>
+                            {isResolved && <div style={{ marginTop: '2px' }}>{renderResolveUI(exc)}</div>}
+                            {!isResolved && resolvingId === exc.id && <div>{renderResolveUI(exc)}</div>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Other exceptions */}
+                {otherExceptions.length > 0 && (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                      <span style={{
+                        display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: MUTED,
+                      }} />
+                      <span style={{ fontSize: '12px', fontWeight: '700', color: DARK }}>Other Exceptions ({otherExceptions.length})</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {otherExceptions.map(exc => {
+                        const isResolved = !!exc.resolved_at
+                        return (
+                          <div key={exc.id} style={{
+                            padding: '6px 10px',
+                            backgroundColor: isResolved ? LIGHT : WHITE,
+                            border: `1px solid ${BORDER}`,
+                            borderRadius: '4px',
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                              <span style={{
+                                fontSize: '12px', color: isResolved ? MUTED : DARK,
+                                textDecoration: isResolved ? 'line-through' : 'none',
+                              }}>
+                                {exc.xero_reference || exc.notes || '—'} — {fmt(exc.xero_amount)}
+                              </span>
+                              {!isResolved && resolvingId !== exc.id && (
+                                <div style={{ flexShrink: 0 }}>{renderResolveUI(exc)}</div>
+                              )}
+                            </div>
+                            {isResolved && <div style={{ marginTop: '2px' }}>{renderResolveUI(exc)}</div>}
+                            {!isResolved && resolvingId === exc.id && <div>{renderResolveUI(exc)}</div>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
           </div>
 
           {/* Right column — PDF viewer */}
@@ -769,14 +821,14 @@ export default function StatementDetailPage() {
               {pdfUrl ? (
                 <iframe
                   src={pdfUrl}
-                  style={{ width: '100%', height: '100%', minHeight: '700px', border: 'none', borderRadius: '10px' }}
+                  style={{ width: '100%', height: '100%', minHeight: '600px', border: 'none', borderRadius: '8px' }}
                 />
               ) : (
                 <div style={{
-                  width: '100%', height: '100%', minHeight: '700px',
-                  backgroundColor: LIGHT, borderRadius: '10px',
+                  width: '100%', height: '100%', minHeight: '600px',
+                  backgroundColor: LIGHT, borderRadius: '8px',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: MUTED, fontSize: '14px', border: `1px solid ${BORDER}`,
+                  color: MUTED, fontSize: '13px', border: `1px solid ${BORDER}`,
                 }}>
                   PDF not available
                 </div>
