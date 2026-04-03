@@ -156,12 +156,14 @@ export async function POST(
       exceptionCount: exceptions.length,
       xeroTransactionCount: xeroTxns.length,
     })
-  } catch (err) {
-    console.error('[recon-run] Unexpected error:', err)
+  } catch (err: any) {
+    const msg = err?.message || String(err)
+    console.error(`[recon-run] Unexpected error: ${msg}`)
+    console.error(`[recon-run] Stack: ${err?.stack || 'no stack'}`)
     await supabase
       .from('supplier_statements')
       .update({ status: 'FAILED' })
       .eq('id', statementId)
-    return NextResponse.json({ error: 'Reconciliation failed' }, { status: 500 })
+    return NextResponse.json({ error: `Reconciliation failed: ${msg}` }, { status: 500 })
   }
 }
