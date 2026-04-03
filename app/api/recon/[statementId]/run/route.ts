@@ -102,6 +102,12 @@ export async function POST(
 
     console.log(`[recon-run] Statement ${statementId}: ${lines.length} lines, ${xeroTxns.length} Xero transactions`)
 
+    // 6b. Save Xero transactions snapshot for the detail page
+    await supabase
+      .from('supplier_statements')
+      .update({ xero_transactions_json: xeroTxns })
+      .eq('id', statementId)
+
     // 7. Run reconciliation
     const { matches, exceptions } = reconcile(lines, xeroTxns, statementId)
 
