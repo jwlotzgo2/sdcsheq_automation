@@ -382,7 +382,7 @@ export default function StatementDetailPage() {
       <div style={{ padding: '20px 28px', height: 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column' }}>
 
         {/* Header Row */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <Link
               href="/statements"
@@ -441,7 +441,7 @@ export default function StatementDetailPage() {
         {/* Two-column layout */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : '1fr 380px',
+          gridTemplateColumns: isMobile ? '1fr' : '1fr 520px',
           gap: '20px',
           flex: 1,
           minHeight: 0,
