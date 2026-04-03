@@ -14,6 +14,12 @@ function parseXeroDate(raw: string | null | undefined): string | null {
   return null
 }
 
+// Convert "YYYY-MM-DD" to Xero DateTime format: "DateTime(YYYY,MM,DD)"
+function toXeroDateTime(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return `DateTime(${y},${m},${d})`
+}
+
 export async function getSupplierTransactions(
   xeroContactId: string,
   dateFrom: string,
@@ -21,20 +27,19 @@ export async function getSupplierTransactions(
 ): Promise<XeroTransaction[]> {
   const transactions: XeroTransaction[] = []
 
-  // Fetch bills — URL-encode the where clause to avoid query string parsing issues
+  // Xero where syntax: use Guid(), DateTime(y,m,d), && for AND
   const billsWhere = encodeURIComponent(
-    `Type=="ACCPAY" AND Contact.ContactID==guid("${xeroContactId}") AND Date>=DateTime(${dateFrom}T00:00:00) AND Date<=DateTime(${dateTo}T23:59:59)`
+    `Type=="ACCPAY"&&ContactID==Guid("${xeroContactId}")&&Date>=${toXeroDateTime(dateFrom)}&&Date<=${toXeroDateTime(dateTo)}`
   )
   const billsData = await xeroGet(
     `Invoices?where=${billsWhere}&order=Date`
   )
 
-  // Fetch credit notes — CreditNotes endpoint doesn't support Contact.ContactID filter,
-  // so we fetch by date range and filter in JS
+  // CreditNotes — fetch by date range, filter to supplier in JS
   let creditNotesData: any = { CreditNotes: [] }
   try {
     const cnWhere = encodeURIComponent(
-      `Date>=DateTime(${dateFrom}T00:00:00) AND Date<=DateTime(${dateTo}T23:59:59)`
+      `Date>=${toXeroDateTime(dateFrom)}&&Date<=${toXeroDateTime(dateTo)}`
     )
     const allCN = await xeroGet(
       `CreditNotes?where=${cnWhere}`
