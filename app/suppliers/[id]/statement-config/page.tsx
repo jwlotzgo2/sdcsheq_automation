@@ -24,6 +24,7 @@ export default function StatementConfigPage() {
   const [step, setStep] = useState<Step>('upload')
   const [file, setFile] = useState<File | null>(null)
   const [storagePath, setStoragePath] = useState<string | null>(null)
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [supplierName, setSupplierName] = useState<string>('')
   const [config, setConfig] = useState<ProposedStatementConfig | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -67,6 +68,12 @@ export default function StatementConfigPage() {
 
       if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`)
       setStoragePath(path)
+
+      // Get signed URL for PDF preview
+      const { data: urlData } = await supabase.storage
+        .from('invoices')
+        .createSignedUrl(path, 3600)
+      if (urlData?.signedUrl) setPdfUrl(urlData.signedUrl)
 
       const res = await fetch('/api/recon/config/analyse', {
         method: 'POST',
@@ -146,7 +153,7 @@ export default function StatementConfigPage() {
 
   return (
     <AppShell>
-      <div style={{ maxWidth: '760px', margin: '0 auto', padding: '32px 24px' }}>
+      <div style={{ maxWidth: step === 'review' ? '1400px' : '760px', margin: '0 auto', padding: '32px 24px', transition: 'max-width 0.2s' }}>
 
         <div style={{ marginBottom: '28px' }}>
           <button
@@ -218,6 +225,8 @@ export default function StatementConfigPage() {
         )}
 
         {step === 'review' && config && (
+          <div style={{ display: 'grid', gridTemplateColumns: pdfUrl ? '1fr 520px' : '1fr', gap: '24px' }}>
+          {/* Left: config form */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
             <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: '10px', padding: '24px' }}>
@@ -417,6 +426,27 @@ export default function StatementConfigPage() {
                 Start Over
               </button>
             </div>
+          </div>
+
+          {/* Right: PDF viewer */}
+          {pdfUrl && (
+            <div style={{
+              backgroundColor: WHITE,
+              border: `1px solid ${BORDER}`,
+              borderRadius: '10px',
+              overflow: 'hidden',
+              position: 'sticky',
+              top: '20px',
+              height: 'fit-content',
+              maxHeight: 'calc(100vh - 140px)',
+            }}>
+              <iframe
+                src={pdfUrl}
+                style={{ width: '100%', height: 'calc(100vh - 160px)', border: 'none' }}
+                title="Statement PDF"
+              />
+            </div>
+          )}
           </div>
         )}
 
