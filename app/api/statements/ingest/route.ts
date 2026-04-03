@@ -5,6 +5,9 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { extractStatement } from '@/lib/claude/extractStatement'
 
+// Allow up to 60s for Claude PDF extraction
+export const maxDuration = 60
+
 function getSupabase() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -65,12 +68,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to create statement record' }, { status: 500 })
     }
 
-    // Fire and forget — same pattern as invoice extraction
-    extractStatement(statement.id).catch(err =>
-      console.error(`[ingest] Extraction error for ${statement.id}:`, err)
-    )
+    // Await extraction — must complete before serverless function exits
+    try {
+      await extractStatement(statement.id)
+    } catch (extractErr) {
+      console.error(`[ingest] Extraction error for ${statement.id}:`, extractErr)
+      // Don't fail the response — the record exists with FAILED status
+    }
 
-    return NextResponse.json({ statement_id: statement.id, status: 'INGESTED' })
+    // Re-read status after extraction
+    const { data: updated } = await supabase
+      .from('supplier_statements')
+      .select('status')
+      .eq('id', statement.id)
+      .single()
+
+    return NextResponse.json({
+      statement_id: statement.id,
+      status: updated?.status || 'INGESTED',
+    })
   } catch (err) {
     console.error('[ingest] Unexpected error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
