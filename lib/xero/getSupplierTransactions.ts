@@ -21,14 +21,27 @@ export async function getSupplierTransactions(
 ): Promise<XeroTransaction[]> {
   const transactions: XeroTransaction[] = []
 
-  const [billsData, creditNotesData] = await Promise.all([
-    xeroGet(
-      `Invoices?where=Type=="ACCPAY" AND Contact.ContactID==guid("${xeroContactId}") AND Date>=DateTime(${dateFrom}T00:00:00) AND Date<=DateTime(${dateTo}T23:59:59)&order=Date`
-    ),
-    xeroGet(
-      `CreditNotes?where=Contact.ContactID==guid("${xeroContactId}") AND Date>=DateTime(${dateFrom}T00:00:00) AND Date<=DateTime(${dateTo}T23:59:59)`
-    ),
-  ])
+  // Fetch bills — Invoices endpoint supports Contact.ContactID filter
+  const billsData = await xeroGet(
+    `Invoices?where=Type=="ACCPAY" AND Contact.ContactID==guid("${xeroContactId}") AND Date>=DateTime(${dateFrom}T00:00:00) AND Date<=DateTime(${dateTo}T23:59:59)&order=Date`
+  )
+
+  // Fetch credit notes — CreditNotes endpoint doesn't support Contact.ContactID filter,
+  // so we fetch by date range and filter in JS
+  let creditNotesData: any = { CreditNotes: [] }
+  try {
+    const allCN = await xeroGet(
+      `CreditNotes?where=Date>=DateTime(${dateFrom}T00:00:00) AND Date<=DateTime(${dateTo}T23:59:59)`
+    )
+    // Filter to this supplier client-side
+    creditNotesData = {
+      CreditNotes: (allCN?.CreditNotes ?? []).filter(
+        (cn: any) => cn.Contact?.ContactID === xeroContactId
+      ),
+    }
+  } catch (err) {
+    console.warn('[getSupplierTransactions] CreditNotes fetch failed, skipping:', err)
+  }
 
   const bills = billsData?.Invoices ?? []
   if (bills.length === 100) {
