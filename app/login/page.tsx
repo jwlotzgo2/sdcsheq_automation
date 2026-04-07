@@ -108,7 +108,7 @@ function SignInForm({ dark }: { dark?: boolean }) {
     if (!email) { setError('Please enter your email address first.'); return }
     setLoading(true); setError('')
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${window.location.origin}/api/auth/callback?next=/reset-password`,
     })
     if (error) { setError(error.message); setLoading(false) }
     else { setResetSent(true); setLoading(false) }

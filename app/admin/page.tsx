@@ -105,16 +105,11 @@ export default function AdminPage() {
       setXeroSettings(xero)
       setJournal(auditData ?? [])
 
-      // Fetch last login via API route
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.access_token) {
-        fetch('/api/admin/users-activity', {
-          headers: { Authorization: `Bearer ${session.access_token}` }
-        })
-          .then(r => r.json())
-          .then(d => { if (d.users) setAuthUsers(d.users) })
-          .catch(() => {})
-      }
+      // Fetch last login via API route (uses cookie-based auth, no Bearer token needed)
+      fetch('/api/admin/users-activity')
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d?.users) setAuthUsers(d.users) })
+        .catch(() => {})
 
       // Count queries in parallel
       const [{ count: totalC }, { count: reviewC }, { count: approvalC },
