@@ -230,6 +230,25 @@ export default function ReviewPage() {
     else { setSelected(null); setLines([]) }
   }
 
+  const handleRecall = async () => {
+    if (!selected || selected.status !== 'PENDING_APPROVAL') return
+    setSubmitting(true)
+    const user = (await supabase.auth.getUser()).data.user
+    await supabase.from('invoices').update({ status: 'IN_REVIEW' }).eq('id', selected.id)
+    await supabase.from('audit_trail').insert({
+      invoice_id: selected.id, from_status: 'PENDING_APPROVAL', to_status: 'IN_REVIEW',
+      actor_email: user?.email, notes: 'Recalled by reviewer',
+    })
+    setSubmitting(false)
+    // Move invoice from completed back to queue
+    setCompletedInvoices(prev => prev.filter(i => i.id !== selected.id))
+    const recalled = { ...selected, status: 'IN_REVIEW' }
+    setInvoices(prev => [recalled, ...prev])
+    setSelected(recalled)
+  }
+
+  const isRecallable = selected?.status === 'PENDING_APPROVAL'
+
   // ── MOBILE ──────────────────────────────────────────────────────
   if (isMobile) {
     return (
@@ -408,10 +427,18 @@ export default function ReviewPage() {
           </div>
           {selected && (
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={handleReject} disabled={submitting} style={{ padding: '7px 14px', borderRadius: '7px', border: '1.5px solid #EF4444', backgroundColor: WHITE, color: '#EF4444', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Reject</button>
-              <button onClick={handleSubmit} disabled={submitting} style={{ padding: '7px 16px', borderRadius: '7px', border: 'none', backgroundColor: AMBER, color: WHITE, fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
-                {submitting ? 'Submitting...' : 'Submit for Approval →'}
-              </button>
+              {isRecallable ? (
+                <button onClick={handleRecall} disabled={submitting} style={{ padding: '7px 16px', borderRadius: '7px', border: '1.5px solid #F97316', backgroundColor: WHITE, color: '#F97316', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
+                  {submitting ? 'Recalling...' : 'Recall for Editing'}
+                </button>
+              ) : (
+                <>
+                  <button onClick={handleReject} disabled={submitting} style={{ padding: '7px 14px', borderRadius: '7px', border: '1.5px solid #EF4444', backgroundColor: WHITE, color: '#EF4444', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Reject</button>
+                  <button onClick={handleSubmit} disabled={submitting} style={{ padding: '7px 16px', borderRadius: '7px', border: 'none', backgroundColor: AMBER, color: WHITE, fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
+                    {submitting ? 'Submitting...' : 'Submit for Approval →'}
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -448,7 +475,7 @@ export default function ReviewPage() {
                   {completedInvoices.length === 0 ? (
                     <div style={{ padding: '12px', textAlign: 'center', color: MUTED, fontSize: '11px' }}>No completed invoices</div>
                   ) : completedInvoices.map(inv => (
-                    <div key={inv.id} style={{ padding: '8px 12px', borderBottom: `1px solid ${LIGHT}`, opacity: 0.7 }}>
+                    <div key={inv.id} onClick={() => selectInvoice(inv.id)} style={{ padding: '8px 12px', borderBottom: `1px solid ${LIGHT}`, cursor: 'pointer', opacity: selected?.id === inv.id ? 1 : 0.7, backgroundColor: selected?.id === inv.id ? '#F0FDF4' : 'transparent', borderLeft: selected?.id === inv.id ? '3px solid #5B6B2D' : '3px solid transparent' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '2px' }}>
                         <div style={{ fontSize: '11px', fontWeight: '500', color: DARK, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{inv.supplier_name ?? 'Unknown'}</div>
                         <span style={{ fontSize: '8px', fontWeight: '700', padding: '1px 5px', borderRadius: '6px', flexShrink: 0,
