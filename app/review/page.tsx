@@ -123,7 +123,7 @@ export default function ReviewPage() {
     const { data } = await supabase
       .from('invoices')
       .select('id, status, supplier_name, invoice_number, invoice_date, amount_incl, updated_at')
-      .in('status', ['APPROVED', 'XERO_POSTED', 'XERO_AUTHORISED', 'XERO_PAID'])
+      .in('status', ['PENDING_APPROVAL', 'APPROVED', 'XERO_POSTED', 'XERO_AUTHORISED', 'XERO_PAID'])
       .order('updated_at', { ascending: false })
       .limit(50)
     setCompletedInvoices(data ?? [])
@@ -231,13 +231,13 @@ export default function ReviewPage() {
   }
 
   const handleRecall = async () => {
-    if (!selected || selected.status !== 'PENDING_APPROVAL') return
+    if (!selected || !['PENDING_APPROVAL', 'APPROVED'].includes(selected.status)) return
     setSubmitting(true)
     const user = (await supabase.auth.getUser()).data.user
     await supabase.from('invoices').update({ status: 'IN_REVIEW' }).eq('id', selected.id)
     await supabase.from('audit_trail').insert({
-      invoice_id: selected.id, from_status: 'PENDING_APPROVAL', to_status: 'IN_REVIEW',
-      actor_email: user?.email, notes: 'Recalled by reviewer',
+      invoice_id: selected.id, from_status: selected.status, to_status: 'IN_REVIEW',
+      actor_email: user?.email, notes: `Recalled by reviewer from ${selected.status}`,
     })
     setSubmitting(false)
     // Move invoice from completed back to queue
@@ -247,7 +247,7 @@ export default function ReviewPage() {
     setSelected(recalled)
   }
 
-  const isRecallable = selected?.status === 'PENDING_APPROVAL'
+  const isRecallable = ['PENDING_APPROVAL', 'APPROVED'].includes(selected?.status)
 
   // ── MOBILE ──────────────────────────────────────────────────────
   if (isMobile) {
@@ -479,10 +479,10 @@ export default function ReviewPage() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '2px' }}>
                         <div style={{ fontSize: '11px', fontWeight: '500', color: DARK, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{inv.supplier_name ?? 'Unknown'}</div>
                         <span style={{ fontSize: '8px', fontWeight: '700', padding: '1px 5px', borderRadius: '6px', flexShrink: 0,
-                          color: inv.status === 'XERO_PAID' ? '#065F46' : inv.status === 'XERO_POSTED' || inv.status === 'XERO_AUTHORISED' ? '#0D7A6E' : '#5B6B2D',
-                          backgroundColor: inv.status === 'XERO_PAID' ? '#D1FAE5' : inv.status === 'XERO_POSTED' || inv.status === 'XERO_AUTHORISED' ? '#E6F6F4' : '#F0FDF4',
+                          color: inv.status === 'PENDING_APPROVAL' ? '#92400E' : inv.status === 'XERO_PAID' ? '#065F46' : inv.status === 'XERO_POSTED' || inv.status === 'XERO_AUTHORISED' ? '#0D7A6E' : '#5B6B2D',
+                          backgroundColor: inv.status === 'PENDING_APPROVAL' ? '#FEF3C7' : inv.status === 'XERO_PAID' ? '#D1FAE5' : inv.status === 'XERO_POSTED' || inv.status === 'XERO_AUTHORISED' ? '#E6F6F4' : '#F0FDF4',
                         }}>
-                          {inv.status === 'XERO_PAID' ? 'PAID' : inv.status === 'XERO_POSTED' || inv.status === 'XERO_AUTHORISED' ? 'POSTED' : 'APPROVED'}
+                          {inv.status === 'PENDING_APPROVAL' ? 'PENDING' : inv.status === 'XERO_PAID' ? 'PAID' : inv.status === 'XERO_POSTED' || inv.status === 'XERO_AUTHORISED' ? 'POSTED' : 'APPROVED'}
                         </span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
