@@ -2,7 +2,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, Fragment } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import AppShell from '@/components/layout/AppShell'
 import Link from 'next/link'
@@ -134,6 +134,7 @@ export default function StatementDetailPage() {
   const [resolution, setResolution] = useState('')
 
   const isMobile = useIsMobile()
+  const router = useRouter()
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -144,6 +145,12 @@ export default function StatementDetailPage() {
     if (!id) return
     setLoading(true)
     setError(null)
+
+    // Admin-only page guard
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { router.push('/login'); return }
+    const { data: profile } = await supabase.from('user_profiles').select('role').eq('email', user.email).maybeSingle()
+    if (!['AP_ADMIN', 'FINANCE_MANAGER'].includes(profile?.role ?? '')) { router.push('/'); return }
 
     try {
       const { data: stmt, error: stmtErr } = await supabase

@@ -35,6 +35,15 @@ export default function StatementConfigPage() {
   )
 
   useEffect(() => {
+    // Admin-only page guard
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) { router.push('/login'); return }
+      supabase.from('user_profiles').select('role').eq('email', user.email).maybeSingle()
+        .then(({ data: profile }) => {
+          if (!['AP_ADMIN', 'FINANCE_MANAGER'].includes(profile?.role ?? '')) { router.push('/'); return }
+        })
+    })
+
     supabase
       .from('suppliers')
       .select('name')

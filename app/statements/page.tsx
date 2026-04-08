@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import { useRouter } from 'next/navigation'
 import AppShell from '@/components/layout/AppShell'
 import Link from 'next/link'
 
@@ -57,12 +58,20 @@ export default function StatementsPage() {
   const [selectedSupplier, setSelectedSupplier] = useState('')
   const [error, setError] = useState<string | null>(null)
 
+  const router = useRouter()
+
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
   const load = useCallback(async () => {
+    // Admin-only page guard
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { router.push('/login'); return }
+    const { data: profile } = await supabase.from('user_profiles').select('role').eq('email', user.email).maybeSingle()
+    if (!['AP_ADMIN', 'FINANCE_MANAGER'].includes(profile?.role ?? '')) { router.push('/'); return }
+
     const [{ data: stmts }, { data: sups }] = await Promise.all([
       supabase
         .from('supplier_statements')
