@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import AppShell from '@/components/layout/AppShell'
+import SearchableSelect from '@/components/SearchableSelect'
 
 const AMBER  = '#E8960C'
 const DARK   = '#2A2A2A'
@@ -59,6 +60,9 @@ export default function ReviewPage() {
   const [newSupplierVat, setNewSupplierVat]         = useState('')
   const [creatingSupplier, setCreatingSupplier]     = useState(false)
   const [createError, setCreateError]               = useState('')
+  const [completedInvoices, setCompletedInvoices]   = useState<any[]>([])
+  const [showCompleted, setShowCompleted]           = useState(false)
+  const [headerGl, setHeaderGl]                     = useState('')
   const isMobile = useIsMobile()
 
   const supabase = createBrowserClient(
@@ -66,7 +70,7 @@ export default function ReviewPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  useEffect(() => { fetchInvoices() }, [])
+  useEffect(() => { fetchInvoices(); fetchCompletedInvoices() }, [])
   useEffect(() => { if (glCodes.length === 0) fetchGlAndSuppliers() }, [])
 
   const fetchInvoices = async () => {
@@ -83,7 +87,7 @@ export default function ReviewPage() {
 
   const fetchGlAndSuppliers = async () => {
     const [{ data: gl }, { data: supp }] = await Promise.all([
-      supabase.from('gl_codes').select('id, xero_account_code, name').eq('is_active', true).order('xero_account_code'),
+      supabase.from('gl_codes').select('id, xero_account_code, name, account_type').eq('is_active', true).not('account_type', 'in', '("REVENUE")').order('xero_account_code'),
       supabase.from('suppliers').select('id, name, vat_number').eq('is_active', true).order('name'),
     ])
     setGlCodes(gl ?? [])
@@ -115,8 +119,29 @@ export default function ReviewPage() {
     setLoadingDetail(false)
   }
 
+  const fetchCompletedInvoices = async () => {
+    const { data } = await supabase
+      .from('invoices')
+      .select('id, status, supplier_name, invoice_number, invoice_date, amount_incl, updated_at')
+      .in('status', ['APPROVED', 'XERO_POSTED', 'XERO_AUTHORISED', 'XERO_PAID'])
+      .order('updated_at', { ascending: false })
+      .limit(50)
+    setCompletedInvoices(data ?? [])
+  }
+
   const updateLine = (index: number, field: string, value: any) => {
     setLines(prev => prev.map((l, i) => i === index ? { ...l, [field]: value } : l))
+  }
+
+  const applyHeaderGl = (glId: string) => {
+    setHeaderGl(glId)
+    if (glId) setLines(prev => prev.map(l => ({ ...l, gl_code_id: glId })))
+  }
+
+  const updateHeaderField = async (field: string, value: any) => {
+    if (!selected) return
+    setSelected((prev: any) => ({ ...prev, [field]: value }))
+    await supabase.from('invoices').update({ [field]: value || null }).eq('id', selected.id)
   }
 
   const handleCreateSupplier = async () => {
@@ -301,6 +326,15 @@ export default function ReviewPage() {
                   </button>
                 )}
 
+                {/* Header GL — apply to all lines (mobile) */}
+                <div style={{ backgroundColor: WHITE, borderRadius: '10px', border: `1px solid ${BORDER}`, padding: '12px 16px', marginBottom: '12px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Apply GL to all lines</div>
+                  <select value={headerGl} onChange={e => applyHeaderGl(e.target.value)} style={{ width: '100%', padding: '10px', fontSize: '14px', border: `1.5px solid ${BORDER}`, borderRadius: '8px', backgroundColor: WHITE, color: DARK }}>
+                    <option value="">— Select to apply —</option>
+                    {glCodes.map(g => <option key={g.id} value={g.id}>{g.xero_account_code} · {g.name}</option>)}
+                  </select>
+                </div>
+
                 {/* Line items */}
                 <div style={{ backgroundColor: WHITE, borderRadius: '10px', border: `1px solid ${BORDER}`, overflow: 'hidden', marginBottom: '12px' }}>
                   <div style={{ padding: '12px 16px', borderBottom: `1px solid ${BORDER}`, fontSize: '11px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Line Items</div>
@@ -403,6 +437,36 @@ export default function ReviewPage() {
                 </div>
               ))}
             </div>
+            {/* Recently Completed */}
+            <div style={{ borderTop: `1px solid ${BORDER}` }}>
+              <button onClick={() => setShowCompleted(!showCompleted)} style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '10px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Completed ({completedInvoices.length})</span>
+                <span style={{ fontSize: '10px', color: MUTED }}>{showCompleted ? '▲' : '▼'}</span>
+              </button>
+              {showCompleted && (
+                <div style={{ overflowY: 'auto', maxHeight: '200px' }}>
+                  {completedInvoices.length === 0 ? (
+                    <div style={{ padding: '12px', textAlign: 'center', color: MUTED, fontSize: '11px' }}>No completed invoices</div>
+                  ) : completedInvoices.map(inv => (
+                    <div key={inv.id} style={{ padding: '8px 12px', borderBottom: `1px solid ${LIGHT}`, opacity: 0.7 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '2px' }}>
+                        <div style={{ fontSize: '11px', fontWeight: '500', color: DARK, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{inv.supplier_name ?? 'Unknown'}</div>
+                        <span style={{ fontSize: '8px', fontWeight: '700', padding: '1px 5px', borderRadius: '6px', flexShrink: 0,
+                          color: inv.status === 'XERO_PAID' ? '#065F46' : inv.status === 'XERO_POSTED' || inv.status === 'XERO_AUTHORISED' ? '#0D7A6E' : '#5B6B2D',
+                          backgroundColor: inv.status === 'XERO_PAID' ? '#D1FAE5' : inv.status === 'XERO_POSTED' || inv.status === 'XERO_AUTHORISED' ? '#E6F6F4' : '#F0FDF4',
+                        }}>
+                          {inv.status === 'XERO_PAID' ? 'PAID' : inv.status === 'XERO_POSTED' || inv.status === 'XERO_AUTHORISED' ? 'POSTED' : 'APPROVED'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: '10px', color: MUTED }}>{inv.invoice_number}</span>
+                        <span style={{ fontSize: '10px', fontWeight: '600', color: DARK }}>{fmt(inv.amount_incl)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* COL 2 — Detail */}
@@ -413,22 +477,36 @@ export default function ReviewPage() {
               <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MUTED, fontSize: '13px' }}>Loading...</div>
             ) : (
               <>
-                {/* Compact header */}
+                {/* Compact header — editable fields */}
                 <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, padding: '10px 14px', flexShrink: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                    <div>
-                      <span style={{ fontSize: '14px', fontWeight: 'bold', color: DARK }}>{selected.supplier_name ?? 'Unknown'}</span>
-                      <span style={{ fontSize: '11px', color: MUTED, marginLeft: '8px' }}>{selected.invoice_number}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
+                      <input value={selected.supplier_name ?? ''} onChange={e => setSelected((p: any) => ({ ...p, supplier_name: e.target.value }))} onBlur={e => updateHeaderField('supplier_name', e.target.value)}
+                        style={{ fontSize: '14px', fontWeight: 'bold', color: DARK, border: 'none', borderBottom: `1px dashed ${BORDER}`, outline: 'none', backgroundColor: 'transparent', padding: '0 2px', width: '140px' }} title="Edit supplier name" />
+                      <input value={selected.invoice_number ?? ''} onChange={e => setSelected((p: any) => ({ ...p, invoice_number: e.target.value }))} onBlur={e => updateHeaderField('invoice_number', e.target.value)}
+                        style={{ fontSize: '11px', color: MUTED, border: 'none', borderBottom: `1px dashed ${BORDER}`, outline: 'none', backgroundColor: 'transparent', padding: '0 2px', width: '100px' }} title="Edit invoice number" />
                     </div>
                     <span style={{ fontSize: '14px', fontWeight: '700', color: DARK }}>{fmt(selected.amount_incl)}</span>
                   </div>
-                  <div style={{ display: 'flex', gap: '16px', marginBottom: '8px' }}>
-                    {[{ label: 'Date', value: fmtDate(selected.invoice_date) }, { label: 'Due', value: fmtDate(selected.due_date) }, { label: 'Excl', value: fmt(selected.amount_excl) }, { label: 'VAT', value: fmt(selected.amount_vat) }].map(({ label, value }) => (
-                      <div key={label} style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                        <span style={{ fontSize: '10px', color: MUTED, fontWeight: '600', textTransform: 'uppercase' }}>{label}:</span>
-                        <span style={{ fontSize: '11px', fontWeight: '600', color: DARK }}>{value}</span>
-                      </div>
-                    ))}
+                  <div style={{ display: 'flex', gap: '12px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '10px', color: MUTED, fontWeight: '600', textTransform: 'uppercase' }}>Date:</span>
+                      <input type="date" value={selected.invoice_date ?? ''} onChange={e => updateHeaderField('invoice_date', e.target.value)}
+                        style={{ fontSize: '11px', fontWeight: '600', color: DARK, border: 'none', borderBottom: `1px dashed ${BORDER}`, outline: 'none', backgroundColor: 'transparent', padding: '0 2px' }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '10px', color: MUTED, fontWeight: '600', textTransform: 'uppercase' }}>Due:</span>
+                      <input type="date" value={selected.due_date ?? ''} onChange={e => updateHeaderField('due_date', e.target.value)}
+                        style={{ fontSize: '11px', fontWeight: '600', color: DARK, border: 'none', borderBottom: `1px dashed ${BORDER}`, outline: 'none', backgroundColor: 'transparent', padding: '0 2px' }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '10px', color: MUTED, fontWeight: '600', textTransform: 'uppercase' }}>Excl:</span>
+                      <span style={{ fontSize: '11px', fontWeight: '600', color: DARK }}>{fmt(selected.amount_excl)}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '10px', color: MUTED, fontWeight: '600', textTransform: 'uppercase' }}>VAT:</span>
+                      <span style={{ fontSize: '11px', fontWeight: '600', color: DARK }}>{fmt(selected.amount_vat)}</span>
+                    </div>
                   </div>
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                     <select value={selectedSupplier} onChange={e => setSelectedSupplier(e.target.value)} style={{ flex: 1, padding: '5px 8px', fontSize: '12px', border: `1.5px solid ${BORDER}`, borderRadius: '6px', backgroundColor: WHITE, color: DARK }}>
@@ -457,6 +535,20 @@ export default function ReviewPage() {
                   )
                 })()}
 
+                {/* Header GL — apply to all lines */}
+                <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, padding: '6px 12px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '10px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>Apply GL to all lines</span>
+                  <div style={{ flex: 1 }}>
+                    <SearchableSelect
+                      compact
+                      value={headerGl}
+                      onChange={applyHeaderGl}
+                      options={glCodes.map(g => ({ value: g.id, label: `${g.xero_account_code} · ${g.name}` }))}
+                      placeholder="— Select to apply —"
+                    />
+                  </div>
+                </div>
+
                 {/* Line items — compact */}
                 <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, overflow: 'hidden', flexShrink: 0 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '2fr 40px 80px 80px 170px', padding: '6px 12px', backgroundColor: LIGHT, borderBottom: `1px solid ${BORDER}` }}>
@@ -470,10 +562,13 @@ export default function ReviewPage() {
                       <div style={{ fontSize: '11px', color: DARK }}>{line.quantity}</div>
                       <div style={{ fontSize: '11px', color: DARK }}>{fmt(line.unit_price)}</div>
                       <div style={{ fontSize: '11px', fontWeight: '500', color: DARK }}>{fmt(line.line_total)}</div>
-                      <select value={line.gl_code_id ?? line.gl_codes?.id ?? ''} onChange={e => updateLine(i, 'gl_code_id', e.target.value)} style={{ padding: '3px 5px', fontSize: '10px', border: `1px solid ${BORDER}`, borderRadius: '4px', backgroundColor: WHITE, color: DARK, width: '100%' }}>
-                        <option value="">— GL —</option>
-                        {glCodes.map(g => <option key={g.id} value={g.id}>{g.xero_account_code} · {g.name}</option>)}
-                      </select>
+                      <SearchableSelect
+                        compact
+                        value={line.gl_code_id ?? line.gl_codes?.id ?? ''}
+                        onChange={v => updateLine(i, 'gl_code_id', v)}
+                        options={glCodes.map(g => ({ value: g.id, label: `${g.xero_account_code} · ${g.name}` }))}
+                        placeholder="— GL —"
+                      />
                     </div>
                   ))}
                   <div style={{ padding: '5px 12px', borderTop: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'flex-end', gap: '16px', backgroundColor: LIGHT }}>

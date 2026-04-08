@@ -25,9 +25,9 @@ const PRIMARY_NAV = [
 
 const MORE_NAV_BASE = [
   { href: '/duplicates',  label: 'Duplicates',  icon: '⚠️', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/suppliers',   label: 'Suppliers',   icon: '🏢', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/suppliers',   label: 'Suppliers',   icon: '🏢', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/statements',  label: 'Reconciliation', icon: '📑', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/gl-codes',    label: 'GL Codes',    icon: '📒', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/gl-codes',    label: 'GL Codes',    icon: '📒', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/xero-push',   label: 'Push to Xero',icon: '📤', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/expenses',    label: 'Expenses',    icon: '🧾', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/chat',        label: 'Team Chat',   icon: '💬', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
@@ -61,6 +61,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { startTour } = useTour()
   const [canCapture, setCanCapture] = useState(false)
   const [role, setRole]               = useState('')
+  const [collapsed, setCollapsed]     = useState(() => {
+    if (typeof window !== 'undefined') return sessionStorage.getItem('ga_sidebar_collapsed') === 'true'
+    return false
+  })
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -115,6 +119,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     window.location.href = '/login'
   }
 
+  const toggleSidebar = () => {
+    setCollapsed(prev => {
+      const next = !prev
+      sessionStorage.setItem('ga_sidebar_collapsed', String(next))
+      return next
+    })
+  }
+
   const isActive = (href: string) => href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/')
 
   const Badge = ({ count }: { count: number }) => count > 0 ? (
@@ -137,24 +149,33 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   // ── DESKTOP sidebar ────────────────────────────────────────────
   if (!isMobile) {
+    const sidebarWidth = collapsed ? 60 : 220
+
     const NavItem = ({ href, label, icon, badge }: { href: string; label: string; icon: string; badge?: number }) => (
-      <Link href={href} style={{ textDecoration: 'none' }}>
+      <Link href={href} style={{ textDecoration: 'none' }} title={collapsed ? label : undefined}>
         <div style={{
-          display: 'flex', alignItems: 'center', gap: '10px',
-          padding: '9px 16px', margin: '1px 8px', borderRadius: '6px',
+          display: 'flex', alignItems: 'center', gap: collapsed ? '0' : '10px',
+          padding: collapsed ? '9px 0' : '9px 16px', margin: collapsed ? '1px 4px' : '1px 8px', borderRadius: '6px',
           backgroundColor: isActive(href) ? AMBER : 'transparent',
           color: isActive(href) ? WHITE : 'rgba(255,255,255,0.55)',
           fontSize: '13px', fontWeight: isActive(href) ? '600' : '400',
-          cursor: 'pointer', justifyContent: 'space-between',
+          cursor: 'pointer', justifyContent: collapsed ? 'center' : 'space-between',
+          position: 'relative',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '14px', width: '18px', textAlign: 'center' }}>{icon}</span>
-            {label}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: collapsed ? 'center' : 'flex-start' }}>
+            <span style={{ fontSize: collapsed ? '18px' : '14px', width: collapsed ? 'auto' : '18px', textAlign: 'center' }}>{icon}</span>
+            {!collapsed && label}
           </div>
           {badge != null && badge > 0 && (
-            <span style={{ backgroundColor: isActive(href) ? 'rgba(255,255,255,0.3)' : AMBER, color: WHITE, fontSize: '10px', fontWeight: '700', borderRadius: '10px', padding: '1px 7px', minWidth: '18px', textAlign: 'center' }}>
-              {badge > 99 ? '99+' : badge}
-            </span>
+            collapsed ? (
+              <span style={{ position: 'absolute', top: '2px', right: '4px', backgroundColor: '#EF4444', color: WHITE, fontSize: '8px', fontWeight: '700', borderRadius: '6px', padding: '0 4px', minWidth: '12px', textAlign: 'center' }}>
+                {badge > 99 ? '99+' : badge}
+              </span>
+            ) : (
+              <span style={{ backgroundColor: isActive(href) ? 'rgba(255,255,255,0.3)' : AMBER, color: WHITE, fontSize: '10px', fontWeight: '700', borderRadius: '10px', padding: '1px 7px', minWidth: '18px', textAlign: 'center' }}>
+                {badge > 99 ? '99+' : badge}
+              </span>
+            )
           )}
         </div>
       </Link>
@@ -162,47 +183,52 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
     return (
       <div style={{ display: 'flex', minHeight: '100vh', fontFamily: 'Arial, sans-serif' }}>
-        <aside style={{ width: '220px', minHeight: '100vh', backgroundColor: DARK, display: 'flex', flexDirection: 'column', flexShrink: 0, position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 50 }}>
-          <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-            <div style={{ display: 'inline-block', backgroundColor: AMBER, borderRadius: '4px', padding: '3px 8px', marginBottom: '8px' }}>
-              <span style={{ color: WHITE, fontWeight: 'bold', fontSize: '11px', letterSpacing: '0.08em' }}>GoAutomate</span>
+        <aside style={{ width: `${sidebarWidth}px`, minHeight: '100vh', backgroundColor: DARK, display: 'flex', flexDirection: 'column', flexShrink: 0, position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 50, transition: 'width 0.2s ease' }}>
+          <div style={{ padding: collapsed ? '20px 8px 16px' : '20px 20px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', textAlign: collapsed ? 'center' : 'left' }}>
+            <div style={{ display: 'inline-block', backgroundColor: AMBER, borderRadius: '4px', padding: '3px 8px', marginBottom: collapsed ? '0' : '8px' }}>
+              <span style={{ color: WHITE, fontWeight: 'bold', fontSize: '11px', letterSpacing: '0.08em' }}>{collapsed ? 'GA' : 'GoAutomate'}</span>
             </div>
-            <div style={{ color: WHITE, fontWeight: 'bold', fontSize: '14px', lineHeight: 1.2 }}>SDC SHEQ</div>
-            <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', marginTop: '2px' }}>AP Automation</div>
+            {!collapsed && <>
+              <div style={{ color: WHITE, fontWeight: 'bold', fontSize: '14px', lineHeight: 1.2 }}>SDC SHEQ</div>
+              <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', marginTop: '2px' }}>AP Automation</div>
+            </>}
           </div>
           <nav style={{ padding: '12px 0', flex: 1 }}>
             {role && <>
-            <div style={{ padding: '0 12px 6px', color: 'rgba(255,255,255,0.3)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Main</div>
+            {!collapsed && <div style={{ padding: '0 12px 6px', color: 'rgba(255,255,255,0.3)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Main</div>}
             <NavItem href="/"          label="Home"          icon="🏠" />
             <NavItem href="/dashboard" label="Dashboard"     icon="▦" />
             <NavItem href="/invoices"  label="Invoices"      icon="🗒" />
             {['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/review"    label="Review Queue"  icon="📋" badge={reviewCount} />}
             {['APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/approve"   label="Approve Queue" icon="✅" badge={approveCount} />}
             {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/duplicates" label="Duplicates"   icon="⚠️" badge={duplicateCount} />}
-            {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/suppliers"  label="Suppliers"    icon="🏢" />}
+            <NavItem href="/suppliers"  label="Suppliers"    icon="🏢" />
             {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/statements" label="Reconciliation" icon="📑" />}
-            {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/gl-codes"   label="GL Codes"     icon="📒" />}
+            <NavItem href="/gl-codes"   label="GL Codes"     icon="📒" />
             {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/xero-push"  label="Push to Xero" icon="📤" />}
             {['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/expenses"  label="Expenses"     icon="🧾" />}
             {['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/chat"      label="Team Chat"    icon="💬" />}
             {canCapture && <NavItem href="/capture" label="Capture" icon="📷" />}
             <NavItem href="/help" label="Help" icon="❓" />
             {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <>
-              <div style={{ padding: '12px 12px 6px', color: 'rgba(255,255,255,0.3)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '8px' }}>Admin</div>
+              {!collapsed && <div style={{ padding: '12px 12px 6px', color: 'rgba(255,255,255,0.3)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '8px' }}>Admin</div>}
               <NavItem href="/admin/users"    label="Users"    icon="👥" />
               <NavItem href="/admin/settings" label="Settings" icon="⚙️" />
             </>}
             </>}
           </nav>
-          <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-            <button onClick={handleSignOut} disabled={signingOut} style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', border: 'none', borderRadius: '6px', color: 'rgba(255,255,255,0.45)', fontSize: '13px', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-              <span style={{ fontSize: '14px', width: '18px', textAlign: 'center' }}>→</span>
-              {signingOut ? 'Signing out...' : 'Sign out'}
+          <div style={{ padding: collapsed ? '8px 4px' : '12px 16px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+            <button onClick={toggleSidebar} style={{ width: '100%', padding: '8px', backgroundColor: 'rgba(255,255,255,0.05)', border: 'none', borderRadius: '6px', color: 'rgba(255,255,255,0.45)', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+              {collapsed ? '»' : '«'}
             </button>
-            <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', textAlign: 'center', lineHeight: 1.5 }}>Powered by Go 2 Analytics</div>
+            <button onClick={handleSignOut} disabled={signingOut} title={collapsed ? 'Sign out' : undefined} style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', border: 'none', borderRadius: '6px', color: 'rgba(255,255,255,0.45)', fontSize: '13px', cursor: 'pointer', textAlign: collapsed ? 'center' : 'left', display: 'flex', alignItems: 'center', gap: '10px', justifyContent: collapsed ? 'center' : 'flex-start', marginBottom: collapsed ? '0' : '12px' }}>
+              <span style={{ fontSize: '14px', width: '18px', textAlign: 'center' }}>→</span>
+              {!collapsed && (signingOut ? 'Signing out...' : 'Sign out')}
+            </button>
+            {!collapsed && <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', textAlign: 'center', lineHeight: 1.5 }}>Powered by Go 2 Analytics</div>}
           </div>
         </aside>
-        <div style={{ marginLeft: '220px', flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        <div style={{ marginLeft: `${sidebarWidth}px`, flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', transition: 'margin-left 0.2s ease' }}>
           <header style={{ height: '56px', backgroundColor: WHITE, borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', padding: '0 24px', position: 'sticky', top: 0, zIndex: 40 }}>
             <div style={{ flex: 1 }} />
             <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: AMBER, display: 'flex', alignItems: 'center', justifyContent: 'center', color: WHITE, fontSize: '12px', fontWeight: '700' }}>JL</div>

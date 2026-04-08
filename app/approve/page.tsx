@@ -157,7 +157,7 @@ export default function ApprovePage() {
   }
 
   const fetchGlCodes = async () => {
-    const { data } = await supabase.from('gl_codes').select('id, xero_account_code, name').eq('is_active', true).order('xero_account_code')
+    const { data } = await supabase.from('gl_codes').select('id, xero_account_code, name, account_type').eq('is_active', true).not('account_type', 'in', '("REVENUE")').order('xero_account_code')
     setGlCodes(data ?? [])
   }
 

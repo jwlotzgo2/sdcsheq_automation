@@ -33,6 +33,7 @@ export default function ChatPage() {
   const [userEmail, setUserEmail]           = useState('')
   const [loading, setLoading]               = useState(true)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const isMobile  = useIsMobile()
 
   const supabase = createBrowserClient(
@@ -97,6 +98,7 @@ export default function ChatPage() {
     })
     setMessage('')
     setSending(false)
+    setTimeout(() => inputRef.current?.focus(), 50)
   }
 
   const InvoiceList = () => (
@@ -162,6 +164,8 @@ export default function ChatPage() {
       {/* Input */}
       <div style={{ padding: '12px 14px', borderTop: `1px solid ${BORDER}`, display: 'flex', gap: '8px', flexShrink: 0, backgroundColor: WHITE }}>
         <input
+          ref={inputRef}
+          autoFocus
           value={message}
           onChange={e => setMessage(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}

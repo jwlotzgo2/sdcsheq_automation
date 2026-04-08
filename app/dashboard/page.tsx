@@ -103,7 +103,8 @@ export default function DashboardPage() {
   }
 
   const fetchPipeline = async () => {
-    const { data } = await supabase.from('invoices').select('status').gte('created_at', from).lte('created_at', to)
+    // Show current live status counts (not date-filtered)
+    const { data } = await supabase.from('invoices').select('status')
     const counts: Record<string, number> = {}
     ;(data ?? []).forEach(inv => { counts[inv.status] = (counts[inv.status] || 0) + 1 })
     setPipeline(counts)
