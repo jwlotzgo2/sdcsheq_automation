@@ -71,7 +71,7 @@ export default function EmailLogPage() {
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [postmarkError, setPostmarkError] = useState('')
-  const [stats, setStats] = useState({ postmarkTotal: 0, inApp: 0, missing: 0, invoicesCreated: 0, errors: 0 })
+  const [stats, setStats] = useState({ postmarkTotal: 0, inApp: 0, missing: 0, retrying: 0, failed: 0, invoicesCreated: 0 })
   const router = useRouter()
   const isMobile = useIsMobile()
 
@@ -163,8 +163,9 @@ export default function EmailLogPage() {
       postmarkTotal: postmarkMsgs.length,
       inApp: merged.filter(r => r.inApp).length,
       missing: merged.filter(r => !r.inApp).length,
+      retrying: merged.filter(r => !r.inApp && r.postmarkStatus === 'scheduled').length,
+      failed: merged.filter(r => !r.inApp && r.postmarkStatus === 'failed').length,
       invoicesCreated: (emailInvoices ?? []).length,
-      errors: merged.filter(r => r.appError).length,
     })
     setLoading(false)
   }
@@ -189,7 +190,28 @@ export default function EmailLogPage() {
     )
   }
 
+  const [retrying, setRetrying] = useState<string | null>(null)
+
+  const retryMessage = async (messageId: string) => {
+    setRetrying(messageId)
+    try {
+      const res = await fetch('/api/admin/postmark-retry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId }),
+      })
+      const data = await res.json()
+      if (data.error) alert(`Retry failed: ${data.error}`)
+      else alert('Retry triggered! Postmark will re-POST to your webhook. Refresh in a moment.')
+    } catch { alert('Retry request failed') }
+    setRetrying(null)
+  }
+
   const getRowStatus = (row: MergedRow): { color: string; label: string } => {
+    if (!row.inApp && row.postmarkStatus === 'failed') return { color: RED, label: 'FAILED' }
+    if (!row.inApp && row.postmarkStatus === 'scheduled') return { color: ORANGE, label: 'RETRYING' }
+    if (!row.inApp && row.postmarkStatus === 'queued') return { color: AMBER, label: 'QUEUED' }
+    if (!row.inApp && row.postmarkStatus === 'blocked') return { color: RED, label: 'BLOCKED' }
     if (!row.inApp) return { color: RED, label: 'MISSING' }
     if (row.appError) return { color: ORANGE, label: row.appError }
     if (row.invoices.length > 0) return { color: GREEN, label: `${row.invoices.length} invoice${row.invoices.length !== 1 ? 's' : ''}` }
@@ -212,15 +234,16 @@ export default function EmailLogPage() {
         )}
 
         {/* Stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr 1fr 1fr 1fr', gap: '10px', marginBottom: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr 1fr' : '1fr 1fr 1fr 1fr 1fr 1fr', gap: '10px', marginBottom: '20px' }}>
           {[
-            { label: 'In Postmark', value: stats.postmarkTotal, color: DARK },
-            { label: 'In App', value: stats.inApp, color: GREEN },
-            { label: 'Missing', value: stats.missing, color: stats.missing > 0 ? RED : MUTED },
-            { label: 'Errors', value: stats.errors, color: stats.errors > 0 ? ORANGE : MUTED },
-            { label: 'Invoices Created', value: stats.invoicesCreated, color: TEAL },
+            { label: 'In Postmark', value: stats.postmarkTotal, color: DARK, border: BORDER },
+            { label: 'In App', value: stats.inApp, color: GREEN, border: BORDER },
+            { label: 'Retrying', value: stats.retrying, color: stats.retrying > 0 ? ORANGE : MUTED, border: stats.retrying > 0 ? ORANGE : BORDER },
+            { label: 'Failed', value: stats.failed, color: stats.failed > 0 ? RED : MUTED, border: stats.failed > 0 ? RED : BORDER },
+            { label: 'Missing', value: stats.missing, color: stats.missing > 0 ? RED : MUTED, border: stats.missing > 0 ? RED : BORDER },
+            { label: 'Invoices', value: stats.invoicesCreated, color: TEAL, border: BORDER },
           ].map(s => (
-            <div key={s.label} style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${s.label === 'Missing' && stats.missing > 0 ? RED : BORDER}`, padding: '14px 16px' }}>
+            <div key={s.label} style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${s.border}`, padding: '14px 16px' }}>
               <div style={{ fontSize: '10px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>{s.label}</div>
               <div style={{ fontSize: '22px', fontWeight: '700', color: s.color }}>{s.value}</div>
             </div>
@@ -321,8 +344,23 @@ export default function EmailLogPage() {
                             ))}
                           </>
                         ) : !row.inApp ? (
-                          <div style={{ fontSize: '12px', color: RED, fontWeight: '500' }}>
-                            This email never reached the app. Ask the sender to resend or wait for Postmark to retry.
+                          <div>
+                            <div style={{ fontSize: '12px', color: RED, fontWeight: '500', marginBottom: '8px' }}>
+                              {row.postmarkStatus === 'failed'
+                                ? 'Webhook delivery failed after 10 retries.'
+                                : row.postmarkStatus === 'scheduled'
+                                ? 'Postmark is retrying delivery to your webhook.'
+                                : 'This email never reached the app.'}
+                            </div>
+                            {row.postmarkStatus === 'failed' && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); retryMessage(row.messageId) }}
+                                disabled={retrying === row.messageId}
+                                style={{ padding: '6px 14px', borderRadius: '6px', border: `1.5px solid ${ORANGE}`, backgroundColor: WHITE, color: ORANGE, fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}
+                              >
+                                {retrying === row.messageId ? 'Retrying...' : 'Retry Delivery'}
+                              </button>
+                            )}
                           </div>
                         ) : row.appError ? (
                           <div style={{ fontSize: '12px', color: ORANGE }}>{row.appError}</div>

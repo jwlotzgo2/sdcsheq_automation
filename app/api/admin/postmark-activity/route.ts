@@ -15,37 +15,51 @@ export async function GET(request: NextRequest) {
   if (!postmarkToken) return NextResponse.json({ error: 'POSTMARK_SERVER_TOKEN not configured' }, { status: 500 })
 
   try {
-    // Fetch inbound messages from Postmark (last 100)
-    const res = await fetch('https://api.postmarkapp.com/messages/inbound?count=100&offset=0', {
-      headers: {
-        'Accept': 'application/json',
-        'X-Postmark-Server-Token': postmarkToken,
-      },
-    })
+    // Fetch all statuses in parallel: processed, failed, scheduled (retry), queued, blocked
+    const statuses = ['processed', 'failed', 'scheduled', 'queued', 'blocked']
+    const results = await Promise.all(
+      statuses.map(status =>
+        fetch(`https://api.postmarkapp.com/messages/inbound?count=100&offset=0&status=${status}`, {
+          headers: {
+            'Accept': 'application/json',
+            'X-Postmark-Server-Token': postmarkToken,
+          },
+        }).then(r => r.ok ? r.json() : { InboundMessages: [] })
+          .catch(() => ({ InboundMessages: [] }))
+      )
+    )
 
-    if (!res.ok) {
-      const err = await res.text()
-      console.error('[postmark-activity] API error:', err)
-      return NextResponse.json({ error: `Postmark API error: ${res.status}` }, { status: 500 })
+    // Merge all messages
+    const allMessages: any[] = []
+    const seenIds = new Set<string>()
+
+    for (let i = 0; i < statuses.length; i++) {
+      const msgs = results[i].InboundMessages ?? []
+      for (const m of msgs) {
+        if (!seenIds.has(m.MessageID)) {
+          seenIds.add(m.MessageID)
+          allMessages.push({
+            messageId: m.MessageID,
+            from: m.From,
+            fromName: m.FromName,
+            to: m.To,
+            subject: m.Subject,
+            date: m.Date,
+            status: m.Status ?? statuses[i],
+            attachments: (m.Attachments ?? []).map((a: any) => ({
+              name: a.Name,
+              contentType: a.ContentType,
+              contentLength: a.ContentLength,
+            })),
+          })
+        }
+      }
     }
 
-    const data = await res.json()
-    const messages = (data.InboundMessages ?? []).map((m: any) => ({
-      messageId: m.MessageID,
-      from: m.From,
-      fromName: m.FromName,
-      to: m.To,
-      subject: m.Subject,
-      date: m.Date,
-      status: m.Status,
-      attachments: (m.Attachments ?? []).map((a: any) => ({
-        name: a.Name,
-        contentType: a.ContentType,
-        contentLength: a.ContentLength,
-      })),
-    }))
+    // Sort by date descending
+    allMessages.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
-    return NextResponse.json({ messages, totalCount: data.TotalCount ?? messages.length })
+    return NextResponse.json({ messages: allMessages, totalCount: allMessages.length })
   } catch (err: any) {
     console.error('[postmark-activity]', err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })
