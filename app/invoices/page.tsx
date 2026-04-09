@@ -50,6 +50,32 @@ const avatarColor = (name: string) => {
   return colors[Math.abs(hash) % colors.length]
 }
 
+type DateFilter = 'all' | '7d' | '30d' | 'this_month' | 'last_month' | 'this_year'
+
+function getDateRange(f: DateFilter): { from: string | null; to: string | null; label: string } {
+  const now = new Date()
+  if (f === 'all') return { from: null, to: null, label: 'All Time' }
+  if (f === '7d') {
+    const d = new Date(now); d.setDate(d.getDate() - 7)
+    return { from: d.toISOString(), to: now.toISOString(), label: 'Last 7 Days' }
+  }
+  if (f === '30d') {
+    const d = new Date(now); d.setDate(d.getDate() - 30)
+    return { from: d.toISOString(), to: now.toISOString(), label: 'Last 30 Days' }
+  }
+  if (f === 'this_month') {
+    const from = new Date(now.getFullYear(), now.getMonth(), 1)
+    return { from: from.toISOString(), to: now.toISOString(), label: 'This Month' }
+  }
+  if (f === 'last_month') {
+    const from = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const to = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59)
+    return { from: from.toISOString(), to: to.toISOString(), label: 'Last Month' }
+  }
+  // this_year
+  const from = new Date(now.getFullYear(), 0, 1)
+  return { from: from.toISOString(), to: now.toISOString(), label: 'This Year' }
+}
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false)
@@ -78,11 +104,15 @@ export default function InvoicesPage() {
   const [invoices, setInvoices]               = useState<any[]>([])
   const [loading, setLoading]                 = useState(true)
   const [filter, setFilter]                   = useState('ALL')
+  const [dateFilter, setDateFilter]           = useState<DateFilter>('all')
   const [showPushModal, setShowPushModal]     = useState(false)
   const [approvedInvoices, setApprovedInvoices] = useState<any[]>([])
   const [pushing, setPushing]                 = useState(false)
   const [pushResults, setPushResults]         = useState<Record<string, 'pending' | 'success' | 'error'>>({})
   const [pushDone, setPushDone]               = useState(false)
+  const [deleteTarget, setDeleteTarget]       = useState<any>(null)
+  const [deleteReason, setDeleteReason]       = useState('')
+  const [deleting, setDeleting]               = useState(false)
   const isMobile = useIsMobile()
 
   const supabase = createBrowserClient(
@@ -90,16 +120,19 @@ export default function InvoicesPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  useEffect(() => { fetchInvoices() }, [filter])
+  useEffect(() => { fetchInvoices() }, [filter, dateFilter])
 
   const fetchInvoices = async () => {
     setLoading(true)
+    const { from, to } = getDateRange(dateFilter)
     let query = supabase
       .from('invoices')
       .select('id, status, supplier_name, invoice_number, invoice_date, due_date, amount_incl, created_at, source')
       .order('created_at', { ascending: false })
-      .limit(100)
+      .limit(500)
     if (filter !== 'ALL') query = query.eq('status', filter)
+    if (from) query = query.gte('created_at', from)
+    if (to) query = query.lte('created_at', to)
     const { data } = await query
     setInvoices(data ?? [])
     setLoading(false)
@@ -137,7 +170,29 @@ export default function InvoicesPage() {
     fetchInvoices()
   }
 
+  const handleDelete = async () => {
+    if (!deleteTarget || !deleteReason.trim()) return
+    setDeleting(true)
+    const user = (await supabase.auth.getUser()).data.user
+    // Log deletion in audit trail
+    await supabase.from('audit_trail').insert({
+      invoice_id: deleteTarget.id,
+      from_status: deleteTarget.status,
+      to_status: 'DELETED',
+      actor_email: user?.email,
+      notes: `Deleted: ${deleteReason.trim()}`,
+    })
+    // Delete line items, then invoice
+    await supabase.from('invoice_line_items').delete().eq('invoice_id', deleteTarget.id)
+    await supabase.from('invoices').delete().eq('id', deleteTarget.id)
+    setDeleting(false)
+    setDeleteTarget(null)
+    setDeleteReason('')
+    fetchInvoices()
+  }
+
   const approvedCount = invoices.filter(i => i.status === 'APPROVED').length
+  const totalValue = invoices.reduce((sum, inv) => sum + (Number(inv.amount_incl) || 0), 0)
 
   const FILTERS = [
     { value: 'ALL',              label: 'All' },
@@ -145,7 +200,17 @@ export default function InvoicesPage() {
     { value: 'PENDING_APPROVAL', label: 'Pending Approval' },
     { value: 'APPROVED',         label: 'Approved' },
     { value: 'XERO_POSTED',      label: 'Xero Posted' },
+    { value: 'XERO_PAID',        label: 'Paid' },
     { value: 'REJECTED',         label: 'Rejected' },
+  ]
+
+  const DATE_FILTERS: { value: DateFilter; label: string }[] = [
+    { value: 'all',        label: 'All Time' },
+    { value: '7d',         label: '7 Days' },
+    { value: '30d',        label: '30 Days' },
+    { value: 'this_month', label: 'This Month' },
+    { value: 'last_month', label: 'Last Month' },
+    { value: 'this_year',  label: 'This Year' },
   ]
 
   return (
@@ -153,26 +218,43 @@ export default function InvoicesPage() {
       <div style={{ maxWidth: '1200px' }}>
 
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div>
             <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: DARK, margin: '0 0 4px' }}>Invoices</h1>
             <p style={{ fontSize: '12px', color: MUTED, margin: 0 }}>
               {invoices.length} invoice{invoices.length !== 1 ? 's' : ''}
               {filter !== 'ALL' ? ` · ${STATUS_STYLES[filter]?.label}` : ''}
+              {' · '}{fmt(totalValue)}
             </p>
           </div>
           {approvedCount > 0 && (
             <button onClick={openPushModal} style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', backgroundColor: '#13B5EA', color: WHITE, fontSize: '13px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              ⬆ Push to Xero ({approvedCount})
+              Push to Xero ({approvedCount})
             </button>
           )}
         </div>
 
-        {/* Filters */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+        {/* Totals bar */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+          {[
+            { label: 'Total', value: invoices.length, amount: totalValue, color: DARK },
+            { label: 'Review', value: invoices.filter(i => ['PENDING_REVIEW','IN_REVIEW','RETURNED'].includes(i.status)).length, amount: invoices.filter(i => ['PENDING_REVIEW','IN_REVIEW','RETURNED'].includes(i.status)).reduce((s, i) => s + (Number(i.amount_incl) || 0), 0), color: AMBER },
+            { label: 'Approval', value: invoices.filter(i => i.status === 'PENDING_APPROVAL').length, amount: invoices.filter(i => i.status === 'PENDING_APPROVAL').reduce((s, i) => s + (Number(i.amount_incl) || 0), 0), color: '#8B5CF6' },
+            { label: 'Posted', value: invoices.filter(i => ['XERO_POSTED','XERO_AUTHORISED','XERO_PAID'].includes(i.status)).length, amount: invoices.filter(i => ['XERO_POSTED','XERO_AUTHORISED','XERO_PAID'].includes(i.status)).reduce((s, i) => s + (Number(i.amount_incl) || 0), 0), color: '#0D7A6E' },
+          ].map(t => (
+            <div key={t.label} style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, padding: '10px 14px', flex: 1, minWidth: isMobile ? '45%' : '120px' }}>
+              <div style={{ fontSize: '10px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' }}>{t.label}</div>
+              <div style={{ fontSize: '18px', fontWeight: '700', color: t.color }}>{t.value}</div>
+              <div style={{ fontSize: '11px', color: MUTED }}>{fmt(t.amount)}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Status Filters */}
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
           {FILTERS.map(f => (
             <button key={f.value} onClick={() => setFilter(f.value)} style={{
-              padding: '6px 14px', borderRadius: '20px', fontSize: '13px',
+              padding: '5px 12px', borderRadius: '20px', fontSize: '12px',
               border: filter === f.value ? `1.5px solid ${AMBER}` : `1.5px solid ${BORDER}`,
               backgroundColor: filter === f.value ? AMBER : WHITE,
               color: filter === f.value ? WHITE : MUTED,
@@ -181,10 +263,23 @@ export default function InvoicesPage() {
           ))}
         </div>
 
+        {/* Date Filters */}
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          {DATE_FILTERS.map(f => (
+            <button key={f.value} onClick={() => setDateFilter(f.value)} style={{
+              padding: '4px 10px', borderRadius: '14px', fontSize: '11px',
+              border: dateFilter === f.value ? `1.5px solid ${OLIVE}` : `1px solid ${BORDER}`,
+              backgroundColor: dateFilter === f.value ? OLIVE : WHITE,
+              color: dateFilter === f.value ? WHITE : MUTED,
+              fontWeight: dateFilter === f.value ? '600' : '400', cursor: 'pointer',
+            }}>{f.label}</button>
+          ))}
+        </div>
+
         {/* Table */}
         <div style={{ backgroundColor: WHITE, borderRadius: '10px', border: `1px solid ${BORDER}`, overflow: isMobile ? 'auto' : 'hidden' }}>
-          {!isMobile && <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 150px 100px 100px 160px', padding: '10px 20px', backgroundColor: LIGHT, borderBottom: `1px solid ${BORDER}` }}>
-              {['', 'Supplier / Invoice', 'Status', 'Invoice Date', 'Amount', 'Timing'].map(h => (
+          {!isMobile && <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 150px 100px 100px 160px 36px', padding: '10px 20px', backgroundColor: LIGHT, borderBottom: `1px solid ${BORDER}` }}>
+              {['', 'Supplier / Invoice', 'Status', 'Invoice Date', 'Amount', 'Timing', ''].map(h => (
               <div key={h} style={{ fontSize: '11px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
             ))}
           </div>}
@@ -206,58 +301,106 @@ export default function InvoicesPage() {
               const color       = avatarColor(supplierName)
 
               return (
-                <Link key={inv.id} href={`/invoices/${inv.id}`} style={{ textDecoration: 'none' }}>
-                  {isMobile ? (
-                    /* MOBILE ROW */
-                    <div style={{ padding: '12px 14px', borderBottom: i < invoices.length - 1 ? `1px solid #F1F5F9` : 'none', borderLeft: isHighValue ? `3px solid ${AMBER}` : isOverdue ? `3px solid ${RED}` : '3px solid transparent', cursor: 'pointer', backgroundColor: WHITE, display: 'flex', alignItems: 'center', gap: '10px' }}
-                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = LIGHT)}
-                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = WHITE)}>
-                      <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: WHITE, fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>{initials(supplierName)}</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '2px', flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: '13px', fontWeight: '600', color: DARK }}>{supplierName}</span>
-                          {isHighValue && <span style={{ fontSize: '9px', fontWeight: '700', color: AMBER, backgroundColor: '#FEF3C7', padding: '1px 5px', borderRadius: '3px' }}>HIGH VALUE</span>}
+                <div key={inv.id} style={{ display: 'flex', alignItems: 'stretch' }}>
+                  <Link href={`/invoices/${inv.id}`} style={{ textDecoration: 'none', flex: 1 }}>
+                    {isMobile ? (
+                      /* MOBILE ROW */
+                      <div style={{ padding: '12px 14px', borderBottom: i < invoices.length - 1 ? `1px solid #F1F5F9` : 'none', borderLeft: isHighValue ? `3px solid ${AMBER}` : isOverdue ? `3px solid ${RED}` : '3px solid transparent', cursor: 'pointer', backgroundColor: WHITE, display: 'flex', alignItems: 'center', gap: '10px' }}
+                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = LIGHT)}
+                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = WHITE)}>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: WHITE, fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>{initials(supplierName)}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '2px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '13px', fontWeight: '600', color: DARK }}>{supplierName}</span>
+                            {isHighValue && <span style={{ fontSize: '9px', fontWeight: '700', color: AMBER, backgroundColor: '#FEF3C7', padding: '1px 5px', borderRadius: '3px' }}>HIGH VALUE</span>}
+                          </div>
+                          <div style={{ fontSize: '11px', color: MUTED }}>{inv.invoice_number ?? '—'}</div>
                         </div>
-                        <div style={{ fontSize: '11px', color: MUTED }}>{inv.invoice_number ?? '—'}</div>
-                      </div>
-                      <div style={{ flexShrink: 0, textAlign: 'right' }}>
-                        <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', backgroundColor: statusStyle.bg, color: statusStyle.color, fontSize: '10px', fontWeight: '600', marginBottom: '3px', whiteSpace: 'nowrap' }}>{statusStyle.label}</span>
-                        <div style={{ fontSize: '12px', fontWeight: '700', color: isHighValue ? AMBER : DARK }}>{fmt(inv.amount_incl)}</div>
-                      </div>
-                    </div>
-                  ) : (
-                    /* DESKTOP ROW */
-                    <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 150px 100px 100px 160px', padding: '12px 20px', borderBottom: i < invoices.length - 1 ? `1px solid #F1F5F9` : 'none', borderLeft: isHighValue ? `3px solid ${AMBER}` : isOverdue ? `3px solid ${RED}` : '3px solid transparent', cursor: 'pointer', backgroundColor: WHITE, alignItems: 'center' }}
-                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = LIGHT)}
-                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = WHITE)}>
-                      <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: WHITE, fontSize: '10px', fontWeight: '700', flexShrink: 0 }}>{initials(supplierName)}</div>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontSize: '13px', fontWeight: '600', color: DARK }}>{supplierName}</span>
-                          {isHighValue && <span style={{ fontSize: '9px', fontWeight: '700', color: AMBER, backgroundColor: '#FEF3C7', padding: '1px 6px', borderRadius: '4px' }}>HIGH VALUE</span>}
-                          {isOverdue  && <span style={{ fontSize: '9px', fontWeight: '700', color: RED,   backgroundColor: '#FEE2E2', padding: '1px 6px', borderRadius: '4px' }}>OVERDUE</span>}
+                        <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                          <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', backgroundColor: statusStyle.bg, color: statusStyle.color, fontSize: '10px', fontWeight: '600', marginBottom: '3px', whiteSpace: 'nowrap' }}>{statusStyle.label}</span>
+                          <div style={{ fontSize: '12px', fontWeight: '700', color: isHighValue ? AMBER : DARK }}>{fmt(inv.amount_incl)}</div>
                         </div>
-                        <div style={{ fontSize: '11px', color: MUTED, marginTop: '2px' }}>{inv.invoice_number ?? 'No invoice number'}</div>
                       </div>
-                      <div><span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: '12px', backgroundColor: statusStyle.bg, color: statusStyle.color, fontSize: '11px', fontWeight: '600' }}>{statusStyle.label}</span></div>
-                      <div style={{ fontSize: '12px', color: DARK }}>{fmtDate(inv.invoice_date)}</div>
-                      <div style={{ fontSize: '13px', fontWeight: '600', color: isHighValue ? AMBER : DARK }}>{fmt(inv.amount_incl)}</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                        <span style={{ fontSize: '11px', fontWeight: '600', color: receivedColor }}>{'Rcvd: '}{receivedAge === 0 ? 'today' : receivedAge === 1 ? '1 day ago' : `${receivedAge}d ago`}</span>
-                        {dueDays !== null ? (
-                          <span style={{ fontSize: '11px', fontWeight: '600', color: dueDays < 0 ? RED : dueDays <= 7 ? AMBER : MUTED }}>{dueDays < 0 ? `Due: ${Math.abs(dueDays)}d overdue` : dueDays === 0 ? 'Due: today' : `Due: ${dueDays}d`}</span>
-                        ) : invoiceAge !== null ? (
-                          <span style={{ fontSize: '11px', color: MUTED }}>{'Inv: '}{invoiceAge === 0 ? 'today' : `${invoiceAge}d old`}</span>
-                        ) : null}
+                    ) : (
+                      /* DESKTOP ROW */
+                      <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 150px 100px 100px 160px', padding: '12px 20px', borderBottom: i < invoices.length - 1 ? `1px solid #F1F5F9` : 'none', borderLeft: isHighValue ? `3px solid ${AMBER}` : isOverdue ? `3px solid ${RED}` : '3px solid transparent', cursor: 'pointer', backgroundColor: WHITE, alignItems: 'center' }}
+                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = LIGHT)}
+                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = WHITE)}>
+                        <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: WHITE, fontSize: '10px', fontWeight: '700', flexShrink: 0 }}>{initials(supplierName)}</div>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '13px', fontWeight: '600', color: DARK }}>{supplierName}</span>
+                            {isHighValue && <span style={{ fontSize: '9px', fontWeight: '700', color: AMBER, backgroundColor: '#FEF3C7', padding: '1px 6px', borderRadius: '4px' }}>HIGH VALUE</span>}
+                            {isOverdue  && <span style={{ fontSize: '9px', fontWeight: '700', color: RED,   backgroundColor: '#FEE2E2', padding: '1px 6px', borderRadius: '4px' }}>OVERDUE</span>}
+                          </div>
+                          <div style={{ fontSize: '11px', color: MUTED, marginTop: '2px' }}>{inv.invoice_number ?? 'No invoice number'}</div>
+                        </div>
+                        <div><span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: '12px', backgroundColor: statusStyle.bg, color: statusStyle.color, fontSize: '11px', fontWeight: '600' }}>{statusStyle.label}</span></div>
+                        <div style={{ fontSize: '12px', color: DARK }}>{fmtDate(inv.invoice_date)}</div>
+                        <div style={{ fontSize: '13px', fontWeight: '600', color: isHighValue ? AMBER : DARK }}>{fmt(inv.amount_incl)}</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                          <span style={{ fontSize: '11px', fontWeight: '600', color: receivedColor }}>{'Rcvd: '}{receivedAge === 0 ? 'today' : receivedAge === 1 ? '1 day ago' : `${receivedAge}d ago`}</span>
+                          {dueDays !== null ? (
+                            <span style={{ fontSize: '11px', fontWeight: '600', color: dueDays < 0 ? RED : dueDays <= 7 ? AMBER : MUTED }}>{dueDays < 0 ? `Due: ${Math.abs(dueDays)}d overdue` : dueDays === 0 ? 'Due: today' : `Due: ${dueDays}d`}</span>
+                          ) : invoiceAge !== null ? (
+                            <span style={{ fontSize: '11px', color: MUTED }}>{'Inv: '}{invoiceAge === 0 ? 'today' : `${invoiceAge}d old`}</span>
+                          ) : null}
+                        </div>
                       </div>
-                    </div>
+                    )}
+                  </Link>
+                  {/* Delete button */}
+                  {!isMobile && !['XERO_POSTED', 'XERO_AUTHORISED', 'XERO_PAID'].includes(inv.status) && (
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleteTarget(inv); setDeleteReason('') }}
+                      style={{ width: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: MUTED, fontSize: '14px', flexShrink: 0, borderBottom: i < invoices.length - 1 ? `1px solid #F1F5F9` : 'none' }}
+                      onMouseEnter={e => (e.currentTarget.style.color = RED)}
+                      onMouseLeave={e => (e.currentTarget.style.color = MUTED)}
+                      title="Delete invoice"
+                    >
+                      🗑
+                    </button>
                   )}
-                </Link>
+                  {!isMobile && ['XERO_POSTED', 'XERO_AUTHORISED', 'XERO_PAID'].includes(inv.status) && (
+                    <div style={{ width: '36px', flexShrink: 0, borderBottom: i < invoices.length - 1 ? `1px solid #F1F5F9` : 'none' }} />
+                  )}
+                </div>
               )
             })
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div onClick={() => !deleting && setDeleteTarget(null)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.45)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()} style={{ backgroundColor: WHITE, borderRadius: '12px', padding: '28px', width: '100%', maxWidth: '440px', boxShadow: '0 24px 80px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <h2 style={{ fontSize: '17px', fontWeight: '700', color: RED, margin: 0 }}>Delete Invoice</h2>
+              {!deleting && <button onClick={() => setDeleteTarget(null)} style={{ background: 'none', border: 'none', fontSize: '20px', color: MUTED, cursor: 'pointer' }}>x</button>}
+            </div>
+            <p style={{ fontSize: '13px', color: MUTED, marginBottom: '16px' }}>
+              This will permanently delete <strong style={{ color: DARK }}>{deleteTarget.supplier_name ?? 'Unknown'}</strong> — {deleteTarget.invoice_number ?? '—'} ({fmt(deleteTarget.amount_incl)}).
+            </p>
+
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: DARK, marginBottom: '6px' }}>Reason for deletion *</label>
+            <textarea
+              value={deleteReason}
+              onChange={e => setDeleteReason(e.target.value)}
+              placeholder="e.g. Duplicate invoice, test data, wrong document..."
+              rows={3}
+              style={{ width: '100%', padding: '10px', fontSize: '14px', border: `1.5px solid ${BORDER}`, borderRadius: '8px', resize: 'none', boxSizing: 'border-box', color: DARK, fontFamily: 'Arial, sans-serif', marginBottom: '16px' }}
+            />
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => setDeleteTarget(null)} disabled={deleting} style={{ flex: 1, padding: '11px', borderRadius: '8px', border: `1.5px solid ${BORDER}`, backgroundColor: WHITE, color: MUTED, fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleDelete} disabled={deleting || !deleteReason.trim()} style={{ flex: 1, padding: '11px', borderRadius: '8px', border: 'none', backgroundColor: !deleteReason.trim() ? '#F3F0EB' : RED, color: !deleteReason.trim() ? MUTED : WHITE, fontSize: '13px', fontWeight: '700', cursor: deleteReason.trim() ? 'pointer' : 'not-allowed' }}>
+                {deleting ? 'Deleting...' : 'Delete Invoice'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Push Modal */}
       {showPushModal && (
@@ -265,7 +408,7 @@ export default function InvoicesPage() {
           <div onClick={e => e.stopPropagation()} style={{ backgroundColor: WHITE, borderRadius: '12px', padding: '32px', width: '100%', maxWidth: '560px', boxShadow: '0 24px 80px rgba(0,0,0,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
               <h2 style={{ fontSize: '17px', fontWeight: '700', color: DARK, margin: 0 }}>Push to Xero</h2>
-              {!pushing && <button onClick={() => setShowPushModal(false)} style={{ background: 'none', border: 'none', fontSize: '20px', color: MUTED, cursor: 'pointer' }}>×</button>}
+              {!pushing && <button onClick={() => setShowPushModal(false)} style={{ background: 'none', border: 'none', fontSize: '20px', color: MUTED, cursor: 'pointer' }}>x</button>}
             </div>
             <p style={{ fontSize: '13px', color: MUTED, marginBottom: '20px' }}>The following approved invoices will be submitted to Xero as draft bills:</p>
 
@@ -283,10 +426,10 @@ export default function InvoicesPage() {
                     <div style={{ fontSize: '12px', color: MUTED }}>{inv.invoice_number ?? '—'}</div>
                     <div style={{ fontSize: '13px', fontWeight: '600', color: DARK }}>{fmt(inv.amount_incl)}</div>
                     <div style={{ fontSize: '16px', textAlign: 'center' }}>
-                      {result === 'pending' && <span style={{ color: AMBER }}>⟳</span>}
-                      {result === 'success' && <span style={{ color: OLIVE }}>✓</span>}
-                      {result === 'error'   && <span style={{ color: RED }}>✗</span>}
-                      {!result             && <span style={{ color: MUTED }}>·</span>}
+                      {result === 'pending' && <span style={{ color: AMBER }}>&#x27F3;</span>}
+                      {result === 'success' && <span style={{ color: OLIVE }}>&#x2713;</span>}
+                      {result === 'error'   && <span style={{ color: RED }}>&#x2717;</span>}
+                      {!result             && <span style={{ color: MUTED }}>&middot;</span>}
                     </div>
                   </div>
                 )
