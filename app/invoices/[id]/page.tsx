@@ -374,15 +374,15 @@ export default function InvoiceDetailPage() {
             <button onClick={handleReextract} disabled={reextracting} style={{ padding: '8px 14px', borderRadius: '7px', border: `1.5px solid ${BORDER}`, backgroundColor: WHITE, color: MUTED, fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>
               {reextracting ? 'Extracting...' : '🔄 Re-scan'}
             </button>
-          {canReview && (
-            <>
-              <button onClick={handleReject} disabled={submitting} style={{ padding: '8px 16px', borderRadius: '7px', border: '1.5px solid #EF4444', backgroundColor: WHITE, color: RED, fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Reject</button>
-              <button onClick={handleSubmit} disabled={submitting} style={{ padding: '8px 20px', borderRadius: '7px', border: 'none', backgroundColor: AMBER, color: WHITE, fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
-                {submitting ? 'Submitting...' : 'Submit for Approval →'}
-              </button>
-            </>
-          )}
-        </div>
+            {canReview && (
+              <>
+                <button onClick={handleReject} disabled={submitting} style={{ padding: '8px 16px', borderRadius: '7px', border: '1.5px solid #EF4444', backgroundColor: WHITE, color: RED, fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Reject</button>
+                <button onClick={handleSubmit} disabled={submitting} style={{ padding: '8px 20px', borderRadius: '7px', border: 'none', backgroundColor: AMBER, color: WHITE, fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
+                  {submitting ? 'Submitting...' : 'Submit for Approval →'}
+                </button>
+              </>
+            )}
+          </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 480px', gap: '12px', flex: 1, minHeight: 0 }}>
           {/* LEFT */}
