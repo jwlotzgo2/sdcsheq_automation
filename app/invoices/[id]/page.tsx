@@ -383,6 +383,7 @@ export default function InvoiceDetailPage() {
               </>
             )}
           </div>
+        </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 480px', gap: '12px', flex: 1, minHeight: 0 }}>
           {/* LEFT */}
