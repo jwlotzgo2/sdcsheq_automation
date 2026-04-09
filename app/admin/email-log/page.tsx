@@ -163,8 +163,8 @@ export default function EmailLogPage() {
       postmarkTotal: postmarkMsgs.length,
       inApp: merged.filter(r => r.inApp).length,
       missing: merged.filter(r => !r.inApp).length,
-      retrying: merged.filter(r => !r.inApp && r.postmarkStatus === 'scheduled').length,
-      failed: merged.filter(r => !r.inApp && r.postmarkStatus === 'failed').length,
+      retrying: merged.filter(r => !r.inApp && r.postmarkStatus.toLowerCase() === 'scheduled').length,
+      failed: merged.filter(r => !r.inApp && r.postmarkStatus.toLowerCase() === 'failed').length,
       invoicesCreated: (emailInvoices ?? []).length,
     })
     setLoading(false)
@@ -208,10 +208,11 @@ export default function EmailLogPage() {
   }
 
   const getRowStatus = (row: MergedRow): { color: string; label: string } => {
-    if (!row.inApp && row.postmarkStatus === 'failed') return { color: RED, label: 'FAILED' }
-    if (!row.inApp && row.postmarkStatus === 'scheduled') return { color: ORANGE, label: 'RETRYING' }
-    if (!row.inApp && row.postmarkStatus === 'queued') return { color: AMBER, label: 'QUEUED' }
-    if (!row.inApp && row.postmarkStatus === 'blocked') return { color: RED, label: 'BLOCKED' }
+    const ps = row.postmarkStatus.toLowerCase()
+    if (!row.inApp && ps === 'failed') return { color: RED, label: 'FAILED' }
+    if (!row.inApp && ps === 'scheduled') return { color: ORANGE, label: 'RETRYING' }
+    if (!row.inApp && ps === 'queued') return { color: AMBER, label: 'QUEUED' }
+    if (!row.inApp && ps === 'blocked') return { color: RED, label: 'BLOCKED' }
     if (!row.inApp) return { color: RED, label: 'MISSING' }
     if (row.appError) return { color: ORANGE, label: row.appError }
     if (row.invoices.length > 0) return { color: GREEN, label: `${row.invoices.length} invoice${row.invoices.length !== 1 ? 's' : ''}` }
@@ -346,13 +347,13 @@ export default function EmailLogPage() {
                         ) : !row.inApp ? (
                           <div>
                             <div style={{ fontSize: '12px', color: RED, fontWeight: '500', marginBottom: '8px' }}>
-                              {row.postmarkStatus === 'failed'
+                              {row.postmarkStatus.toLowerCase() === 'failed'
                                 ? 'Webhook delivery failed after 10 retries.'
-                                : row.postmarkStatus === 'scheduled'
+                                : row.postmarkStatus.toLowerCase() === 'scheduled'
                                 ? 'Postmark is retrying delivery to your webhook.'
                                 : 'This email never reached the app.'}
                             </div>
-                            {row.postmarkStatus === 'failed' && (
+                            {row.postmarkStatus.toLowerCase() === 'failed' && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); retryMessage(row.messageId) }}
                                 disabled={retrying === row.messageId}
