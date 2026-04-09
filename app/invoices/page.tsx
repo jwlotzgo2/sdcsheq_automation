@@ -29,6 +29,7 @@ const STATUS_STYLES: Record<string, { color: string; bg: string; label: string }
   REJECTED:          { color: RED,       bg: '#FEE2E2', label: 'Rejected' },
   RETURNED:          { color: AMBER,     bg: '#FEF3C7', label: 'Returned' },
   XERO_PUSH_FAILED:  { color: RED,       bg: '#FEE2E2', label: 'Push Failed' },
+  DELETED:           { color: '#94A3B8', bg: '#F1F5F9', label: 'Deleted' },
 }
 
 const fmt = (val: any) =>
@@ -130,7 +131,9 @@ export default function InvoicesPage() {
       .select('id, status, supplier_name, invoice_number, invoice_date, due_date, amount_incl, created_at, source')
       .order('created_at', { ascending: false })
       .limit(500)
-    if (filter !== 'ALL') query = query.eq('status', filter)
+    if (filter === 'DELETED') query = query.eq('status', 'DELETED')
+    else if (filter !== 'ALL') query = query.eq('status', filter)
+    else query = query.neq('status', 'DELETED')
     if (from) query = query.gte('created_at', from)
     if (to) query = query.lte('created_at', to)
     const { data } = await query
@@ -174,7 +177,8 @@ export default function InvoicesPage() {
     if (!deleteTarget || !deleteReason.trim()) return
     setDeleting(true)
     const user = (await supabase.auth.getUser()).data.user
-    // Log deletion in audit trail
+    // Soft delete — set status to DELETED
+    await supabase.from('invoices').update({ status: 'DELETED' }).eq('id', deleteTarget.id)
     await supabase.from('audit_trail').insert({
       invoice_id: deleteTarget.id,
       from_status: deleteTarget.status,
@@ -182,9 +186,6 @@ export default function InvoicesPage() {
       actor_email: user?.email,
       notes: `Deleted: ${deleteReason.trim()}`,
     })
-    // Delete line items, then invoice
-    await supabase.from('invoice_line_items').delete().eq('invoice_id', deleteTarget.id)
-    await supabase.from('invoices').delete().eq('id', deleteTarget.id)
     setDeleting(false)
     setDeleteTarget(null)
     setDeleteReason('')
@@ -202,6 +203,7 @@ export default function InvoicesPage() {
     { value: 'XERO_POSTED',      label: 'Xero Posted' },
     { value: 'XERO_PAID',        label: 'Paid' },
     { value: 'REJECTED',         label: 'Rejected' },
+    { value: 'DELETED',          label: 'Deleted' },
   ]
 
   const DATE_FILTERS: { value: DateFilter; label: string }[] = [
