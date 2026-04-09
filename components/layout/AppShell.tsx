@@ -32,8 +32,9 @@ const MORE_NAV_BASE = [
   { href: '/expenses',    label: 'Expenses',    icon: '🧾', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/chat',        label: 'Team Chat',   icon: '💬', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/help',        label: 'Help',        icon: '❓', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/admin/users',    label: 'Users',    icon: '👥', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/admin/settings', label: 'Settings', icon: '⚙️', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/admin/users',      label: 'Users',      icon: '👥', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/admin/email-log',  label: 'Email Log',  icon: '📨', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/admin/settings',   label: 'Settings',   icon: '⚙️', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
 ]
 
 
@@ -212,7 +213,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <NavItem href="/help" label="Help" icon="❓" />
             {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <>
               {!collapsed && <div style={{ padding: '12px 12px 6px', color: 'rgba(255,255,255,0.3)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '8px' }}>Admin</div>}
-              <NavItem href="/admin/users"    label="Users"    icon="👥" />
+              <NavItem href="/admin/users"      label="Users"      icon="👥" />
+              <NavItem href="/admin/email-log"  label="Email Log"  icon="📨" />
               <NavItem href="/admin/settings" label="Settings" icon="⚙️" />
             </>}
             </>}
