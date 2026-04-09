@@ -247,6 +247,28 @@ export default function ReviewPage() {
     setSelected(recalled)
   }
 
+  const [reextracting, setReextracting] = useState(false)
+
+  const handleReextract = async () => {
+    if (!selected) return
+    setReextracting(true)
+    try {
+      const res = await fetch('/api/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoice_id: selected.id, reextract: true }),
+      })
+      const data = await res.json()
+      if (data.error) alert(`Re-extraction failed: ${data.error}`)
+      else {
+        // Reload the invoice
+        await selectInvoice(selected.id)
+        await fetchInvoices()
+      }
+    } catch (err: any) { alert(`Re-extraction failed: ${err.message}`) }
+    setReextracting(false)
+  }
+
   const isRecallable = ['PENDING_APPROVAL', 'APPROVED'].includes(selected?.status)
 
   // ── MOBILE ──────────────────────────────────────────────────────
@@ -433,6 +455,9 @@ export default function ReviewPage() {
                 </button>
               ) : (
                 <>
+                  <button onClick={handleReextract} disabled={reextracting} style={{ padding: '7px 12px', borderRadius: '7px', border: `1.5px solid ${BORDER}`, backgroundColor: WHITE, color: MUTED, fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>
+                    {reextracting ? 'Extracting...' : '🔄 Re-scan'}
+                  </button>
                   <button onClick={handleReject} disabled={submitting} style={{ padding: '7px 14px', borderRadius: '7px', border: '1.5px solid #EF4444', backgroundColor: WHITE, color: '#EF4444', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Reject</button>
                   <button onClick={handleSubmit} disabled={submitting} style={{ padding: '7px 16px', borderRadius: '7px', border: 'none', backgroundColor: AMBER, color: WHITE, fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
                     {submitting ? 'Submitting...' : 'Submit for Approval →'}
