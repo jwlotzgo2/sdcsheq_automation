@@ -47,6 +47,7 @@ interface MergedRow {
   subject: string
   date: string
   postmarkStatus: string
+  retryCount: number
   attachments: { name: string; contentType: string }[]
   pdfCount: number
   inApp: boolean
@@ -128,6 +129,7 @@ export default function EmailLogPage() {
         postmarkStatus: pm.status ?? '',
         attachments: pm.attachments,
         pdfCount: pdfs.length,
+        retryCount: pm.retryCount ?? 0,
         inApp: !!app,
         appProcessed: app?.processed ?? false,
         appError: app?.error ?? null,
@@ -135,7 +137,7 @@ export default function EmailLogPage() {
       }
     })
 
-    // Add any app entries not in Postmark (shouldn't happen but just in case)
+    // Add any app entries not in Postmark
     const pmIds = new Set(postmarkMsgs.map(m => m.messageId))
     for (const log of emailLogs ?? []) {
       if (!pmIds.has(log.postmark_message_id)) {
@@ -145,6 +147,7 @@ export default function EmailLogPage() {
           subject: log.subject,
           date: log.received_at,
           postmarkStatus: 'unknown',
+          retryCount: 0,
           attachments: [],
           pdfCount: log.attachment_count,
           inApp: true,
@@ -310,7 +313,7 @@ export default function EmailLogPage() {
                           </div>
                           <div>
                             <span style={{ fontSize: '10px', color: MUTED, fontWeight: '600' }}>Postmark Status: </span>
-                            <span style={{ fontSize: '10px', color: DARK }}>{row.postmarkStatus || '—'}</span>
+                            <span style={{ fontSize: '10px', color: DARK }}>{row.postmarkStatus || '—'}{row.retryCount > 0 ? ` (${row.retryCount} attempts)` : ''}</span>
                           </div>
                           <div>
                             <span style={{ fontSize: '10px', color: MUTED, fontWeight: '600' }}>Received in App: </span>
@@ -353,7 +356,7 @@ export default function EmailLogPage() {
                                 ? 'Postmark is retrying delivery to your webhook.'
                                 : 'This email never reached the app.'}
                             </div>
-                            {row.postmarkStatus.toLowerCase() === 'failed' && (
+                            {['failed', 'scheduled'].includes(row.postmarkStatus.toLowerCase()) && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); retryMessage(row.messageId) }}
                                 disabled={retrying === row.messageId}

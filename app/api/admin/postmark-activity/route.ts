@@ -15,11 +15,11 @@ export async function GET(request: NextRequest) {
   if (!postmarkToken) return NextResponse.json({ error: 'POSTMARK_SERVER_TOKEN not configured' }, { status: 500 })
 
   try {
-    // Fetch all statuses in parallel: processed, failed, scheduled (retry), queued, blocked
+    // Fetch all statuses in parallel
     const statuses = ['processed', 'failed', 'scheduled', 'queued', 'blocked']
     const results = await Promise.all(
       statuses.map(status =>
-        fetch(`https://api.postmarkapp.com/messages/inbound?count=100&offset=0&status=${status}`, {
+        fetch(`https://api.postmarkapp.com/messages/inbound?count=500&offset=0&status=${status}`, {
           headers: {
             'Accept': 'application/json',
             'X-Postmark-Server-Token': postmarkToken,
@@ -29,35 +29,45 @@ export async function GET(request: NextRequest) {
       )
     )
 
-    // Merge all messages
-    const allMessages: any[] = []
-    const seenIds = new Set<string>()
+    // Deduplicate by MessageID, track retry counts, prefer worst status
+    const statusPriority: Record<string, number> = { failed: 4, blocked: 3, scheduled: 2, queued: 1, processed: 0 }
+    const msgMap: Record<string, any> = {}
 
     for (let i = 0; i < statuses.length; i++) {
       const msgs = results[i].InboundMessages ?? []
       for (const m of msgs) {
-        if (!seenIds.has(m.MessageID)) {
-          seenIds.add(m.MessageID)
-          allMessages.push({
-            messageId: m.MessageID,
+        const id = m.MessageID
+        const status = (m.Status ?? statuses[i]).toLowerCase()
+        if (!msgMap[id]) {
+          msgMap[id] = {
+            messageId: id,
             from: m.From,
             fromName: m.FromName,
             to: m.To,
             subject: m.Subject,
             date: m.Date,
-            status: m.Status ?? statuses[i],
+            status: status,
+            retryCount: 0,
             attachments: (m.Attachments ?? []).map((a: any) => ({
               name: a.Name,
               contentType: a.ContentType,
               contentLength: a.ContentLength,
             })),
-          })
+          }
+        }
+        // Count retries (each entry for same ID = one attempt)
+        if (status === 'scheduled' || status === 'failed') {
+          msgMap[id].retryCount++
+        }
+        // Keep the worst status
+        if ((statusPriority[status] ?? 0) > (statusPriority[msgMap[id].status] ?? 0)) {
+          msgMap[id].status = status
         }
       }
     }
 
-    // Sort by date descending
-    allMessages.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    const allMessages = Object.values(msgMap)
+    allMessages.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
     return NextResponse.json({ messages: allMessages, totalCount: allMessages.length })
   } catch (err: any) {
