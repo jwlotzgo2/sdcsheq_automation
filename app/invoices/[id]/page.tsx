@@ -112,7 +112,7 @@ export default function InvoiceDetailPage() {
   const fetchData = async () => {
     setLoading(true)
     const [{ data: inv }, { data: lineData }, { data: glData }, { data: audit }, { data: suppData }] = await Promise.all([
-      supabase.from('invoices').select('id, status, supplier_id, supplier_name, invoice_number, invoice_date, due_date, amount_excl, amount_vat, amount_incl, currency, notes, storage_path, pdf_url, rejection_reason, record_type, submitted_by').eq('id', id).single(),
+      supabase.from('invoices').select('id, status, supplier_id, supplier_name, invoice_number, invoice_date, due_date, amount_excl, amount_vat, amount_incl, currency, notes, storage_path, rejection_reason, record_type, submitted_by').eq('id', id).single(),
       supabase.from('invoice_line_items').select('*, gl_codes(id, xero_account_code, name)').eq('invoice_id', id).order('sort_order'),
       supabase.from('gl_codes').select('id, xero_account_code, name').eq('is_active', true).order('xero_account_code'),
       supabase.from('audit_trail').select('id, from_status, to_status, actor_email, notes, created_at').eq('invoice_id', id).order('created_at'),
@@ -129,8 +129,6 @@ export default function InvoiceDetailPage() {
       const path = inv.storage_path.replace('invoices/', '')
       const { data: urlData } = await supabase.storage.from('invoices').createSignedUrl(path, 3600)
       if (urlData) setPdfUrl(urlData.signedUrl)
-    } else if (inv?.pdf_url) {
-      setPdfUrl(inv.pdf_url)
     }
     setLoading(false)
   }
