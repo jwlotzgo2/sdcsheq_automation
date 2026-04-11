@@ -259,4 +259,14 @@ export async function extractInvoice(invoiceId: string): Promise<void> {
   })
 
   console.log(`[extract] ✓ Done — ${invoiceId} → PENDING_REVIEW (${duration}ms)`)
+
+  // 10. Check for matching invoices in Xero (non-blocking)
+  try {
+    const { checkAndStoreXeroMatches } = await import('@/lib/xero/findMatchingInvoice')
+    checkAndStoreXeroMatches(invoiceId).catch(err => {
+      console.error(`[extract] Xero match check failed for ${invoiceId}:`, err.message)
+    })
+  } catch (err: any) {
+    console.error(`[extract] Could not run Xero match check:`, err.message)
+  }
 }

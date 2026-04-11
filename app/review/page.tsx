@@ -40,6 +40,82 @@ const SkeletonRow = () => (
   </div>
 )
 
+const XERO_BLUE = '#13B5EA'
+
+const XeroMatchBanner = ({ matches, onLink, linkingMatch, onRefresh, compact }: {
+  matches: any[]; onLink: (id: string) => void; linkingMatch: string | null; onRefresh: () => void; compact?: boolean
+}) => {
+  if (matches.length === 0) return null
+  const best = matches[0]
+  const confidenceColors = { HIGH: '#166534', MEDIUM: '#92400E', LOW: '#9A3412' }
+  const confidenceBg = { HIGH: '#DCFCE7', MEDIUM: '#FEF3C7', LOW: '#FFF7ED' }
+  const fmtAmount = (val: any) => val != null ? `R ${Number(val).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}` : '—'
+  const fmtD = (val: any) => val ? new Date(val).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
+
+  return (
+    <div style={{ backgroundColor: '#EBF8FE', borderRadius: compact ? '8px' : '10px', border: `1.5px solid ${XERO_BLUE}`, padding: compact ? '10px 12px' : '14px 16px', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: compact ? '6px' : '10px' }}>
+        <div style={{ width: compact ? '18px' : '22px', height: compact ? '18px' : '22px', borderRadius: '50%', backgroundColor: XERO_BLUE, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <span style={{ color: '#fff', fontSize: compact ? '10px' : '12px', fontWeight: '700' }}>X</span>
+        </div>
+        <span style={{ fontSize: compact ? '12px' : '13px', fontWeight: '700', color: '#0C4A6E', flex: 1 }}>
+          Similar invoice found in Xero
+        </span>
+        <span style={{ fontSize: compact ? '9px' : '10px', fontWeight: '700', color: confidenceColors[best.match_confidence as keyof typeof confidenceColors], backgroundColor: confidenceBg[best.match_confidence as keyof typeof confidenceBg], padding: '2px 8px', borderRadius: '8px' }}>
+          {best.match_confidence}
+        </span>
+      </div>
+
+      {matches.slice(0, 3).map((m: any) => (
+        <div key={m.id} style={{ backgroundColor: '#fff', borderRadius: '6px', border: '1px solid #BAE6FD', padding: compact ? '8px 10px' : '10px 12px', marginBottom: matches.length > 1 ? '6px' : '0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+            <div>
+              <div style={{ fontSize: compact ? '12px' : '13px', fontWeight: '600', color: '#2A2A2A' }}>{m.xero_contact_name ?? 'Unknown'}</div>
+              <div style={{ fontSize: compact ? '10px' : '11px', color: '#8A8878' }}>{m.xero_invoice_number ?? '—'}</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: compact ? '12px' : '13px', fontWeight: '700', color: '#2A2A2A' }}>{fmtAmount(m.xero_total)}</div>
+              <span style={{ fontSize: '9px', fontWeight: '600', padding: '1px 6px', borderRadius: '6px',
+                color: m.xero_status === 'PAID' ? '#166534' : m.xero_status === 'AUTHORISED' ? '#0D7A6E' : '#64748B',
+                backgroundColor: m.xero_status === 'PAID' ? '#DCFCE7' : m.xero_status === 'AUTHORISED' ? '#E6F6F4' : '#F1F5F9',
+              }}>{m.xero_status}</span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: compact ? '10px' : '14px', flexWrap: 'wrap', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
+              <span style={{ fontSize: '9px', color: '#8A8878', fontWeight: '600', textTransform: 'uppercase' as const }}>Date:</span>
+              <span style={{ fontSize: compact ? '10px' : '11px', fontWeight: '600', color: '#2A2A2A' }}>{fmtD(m.xero_date)}</span>
+            </div>
+            {m.xero_vat_number && (
+              <div style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
+                <span style={{ fontSize: '9px', color: '#8A8878', fontWeight: '600', textTransform: 'uppercase' as const }}>VAT:</span>
+                <span style={{ fontSize: compact ? '10px' : '11px', fontWeight: '600', color: '#2A2A2A' }}>{m.xero_vat_number}</span>
+              </div>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '8px' }}>
+            {m.match_fields?.supplier && <span style={{ fontSize: '9px', fontWeight: '600', color: '#166534', backgroundColor: '#DCFCE7', padding: '1px 6px', borderRadius: '4px' }}>Supplier</span>}
+            {m.match_fields?.vat && <span style={{ fontSize: '9px', fontWeight: '600', color: '#166534', backgroundColor: '#DCFCE7', padding: '1px 6px', borderRadius: '4px' }}>VAT</span>}
+            {m.match_fields?.date && <span style={{ fontSize: '9px', fontWeight: '600', color: '#166534', backgroundColor: '#DCFCE7', padding: '1px 6px', borderRadius: '4px' }}>Date</span>}
+            {m.match_fields?.amount && <span style={{ fontSize: '9px', fontWeight: '600', color: '#166534', backgroundColor: '#DCFCE7', padding: '1px 6px', borderRadius: '4px' }}>Amount</span>}
+          </div>
+          <button
+            onClick={() => onLink(m.id)}
+            disabled={linkingMatch === m.id}
+            style={{ width: '100%', padding: compact ? '7px' : '9px', borderRadius: '6px', border: 'none', backgroundColor: linkingMatch === m.id ? '#94A3B8' : XERO_BLUE, color: '#fff', fontSize: compact ? '12px' : '13px', fontWeight: '700', cursor: 'pointer' }}
+          >
+            {linkingMatch === m.id ? 'Linking...' : 'Link & Mark as Posted in Xero'}
+          </button>
+        </div>
+      ))}
+
+      <button onClick={onRefresh} style={{ marginTop: '6px', background: 'none', border: 'none', color: XERO_BLUE, fontSize: compact ? '10px' : '11px', fontWeight: '600', cursor: 'pointer', padding: 0 }}>
+        Refresh Xero check
+      </button>
+    </div>
+  )
+}
+
 export default function ReviewPage() {
   const [invoices, setInvoices]             = useState<any[]>([])
   const [selected, setSelected]             = useState<any>(null)
@@ -63,6 +139,8 @@ export default function ReviewPage() {
   const [completedInvoices, setCompletedInvoices]   = useState<any[]>([])
   const [showCompleted, setShowCompleted]           = useState(false)
   const [headerGl, setHeaderGl]                     = useState('')
+  const [xeroMatches, setXeroMatches]               = useState<any[]>([])
+  const [linkingMatch, setLinkingMatch]             = useState<string | null>(null)
   const isMobile = useIsMobile()
 
   const supabase = createBrowserClient(
@@ -98,18 +176,21 @@ export default function ReviewPage() {
     setLoadingDetail(true)
     setPdfUrl(null)
     setNotes('')
+    setXeroMatches([])
     if (isMobile) setMobileView('detail')
 
-    const [{ data: inv }, { data: lineData }, { data: audit }] = await Promise.all([
+    const [{ data: inv }, { data: lineData }, { data: audit }, { data: matches }] = await Promise.all([
       supabase.from('invoices').select('id, status, supplier_id, supplier_name, invoice_number, invoice_date, due_date, amount_excl, amount_vat, amount_incl, currency, notes, storage_path, rejection_reason, record_type, submitted_by').eq('id', id).single(),
       supabase.from('invoice_line_items').select('*, gl_codes(id, xero_account_code, name)').eq('invoice_id', id).order('sort_order'),
       supabase.from('audit_trail').select('id, from_status, to_status, actor_email, notes, created_at').eq('invoice_id', id).order('created_at'),
+      supabase.from('xero_invoice_matches').select('*').eq('invoice_id', id).eq('linked', false).order('match_confidence'),
     ])
 
     setSelected(inv)
     setLines(lineData ?? [])
     setAuditTrail(audit ?? [])
     setSelectedSupplier(inv?.supplier_id ?? '')
+    setXeroMatches(matches ?? [])
 
     if (inv?.storage_path) {
       const path = inv.storage_path.replace('invoices/', '')
@@ -269,6 +350,50 @@ export default function ReviewPage() {
     setReextracting(false)
   }
 
+  const handleLinkXero = async (matchId: string) => {
+    if (!selected) return
+    setLinkingMatch(matchId)
+    try {
+      const user = (await supabase.auth.getUser()).data.user
+      const res = await fetch('/api/xero/link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoice_id: selected.id, xero_match_id: matchId, user_email: user?.email }),
+      })
+      const data = await res.json()
+      if (data.error) { alert(`Link failed: ${data.error}`); setLinkingMatch(null); return }
+      // Remove from review queue — it's now XERO_POSTED
+      const remaining = invoices.filter(i => i.id !== selected.id)
+      setInvoices(remaining)
+      setXeroMatches([])
+      if (isMobile) setMobileView('list')
+      if (remaining.length > 0) { if (!isMobile) selectInvoice(remaining[0].id) }
+      else { setSelected(null); setLines([]) }
+    } catch (err: any) { alert(`Link failed: ${err.message}`) }
+    setLinkingMatch(null)
+  }
+
+  const handleRefreshXeroMatch = async () => {
+    if (!selected) return
+    setXeroMatches([])
+    try {
+      await fetch('/api/xero/match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoice_id: selected.id }),
+      })
+      const { data: matches } = await supabase
+        .from('xero_invoice_matches')
+        .select('*')
+        .eq('invoice_id', selected.id)
+        .eq('linked', false)
+        .order('match_confidence')
+      setXeroMatches(matches ?? [])
+    } catch (err: any) {
+      console.error('Xero match refresh failed:', err.message)
+    }
+  }
+
   const isRecallable = ['PENDING_APPROVAL', 'APPROVED'].includes(selected?.status)
 
   // ── MOBILE ──────────────────────────────────────────────────────
@@ -359,6 +484,13 @@ export default function ReviewPage() {
                     </button>
                   )}
                 </div>
+
+                {/* Xero match banner */}
+                {xeroMatches.length > 0 && (
+                  <div style={{ marginBottom: '12px' }}>
+                    <XeroMatchBanner matches={xeroMatches} onLink={handleLinkXero} linkingMatch={linkingMatch} onRefresh={handleRefreshXeroMatch} />
+                  </div>
+                )}
 
                 {/* View PDF button */}
                 {pdfUrl && (
@@ -573,6 +705,11 @@ export default function ReviewPage() {
                     )}
                   </div>
                 </div>
+
+                {/* Xero match banner */}
+                {xeroMatches.length > 0 && (
+                  <XeroMatchBanner compact matches={xeroMatches} onLink={handleLinkXero} linkingMatch={linkingMatch} onRefresh={handleRefreshXeroMatch} />
+                )}
 
                 {/* Return reason from approver */}
                 {(() => {
