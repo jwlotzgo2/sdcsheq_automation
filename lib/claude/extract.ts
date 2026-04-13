@@ -260,8 +260,8 @@ export async function extractInvoice(invoiceId: string): Promise<void> {
 
   // 10. Trigger Xero match check (non-blocking)
   try {
-    const { checkAndStoreMatch } = await import('@/lib/xero/findMatchingInvoice')
-    checkAndStoreMatch(invoiceId).catch(err =>
+    const { checkAndStoreXeroMatches } = await import('@/lib/xero/findMatchingInvoice')
+    checkAndStoreXeroMatches(invoiceId).catch(err =>
       console.error(`[extract] Xero match check failed (non-blocking): ${err.message}`)
     )
   } catch (err: any) {

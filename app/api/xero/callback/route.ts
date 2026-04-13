@@ -23,6 +23,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/admin/settings?xero=error`)
   }
 
+  // CSRF protection: validate state parameter against cookie
+  const state = searchParams.get('state')
+  const storedState = request.cookies.get('xero_oauth_state')?.value
+  if (!state || !storedState || state !== storedState) {
+    console.error('[xero/callback] State mismatch — possible CSRF')
+    return NextResponse.redirect(`${origin}/admin/settings?xero=error`)
+  }
+
   const clientId     = process.env.XERO_CLIENT_ID!
   const clientSecret = process.env.XERO_CLIENT_SECRET!
   const redirectUri  = process.env.XERO_REDIRECT_URI!
@@ -55,7 +63,7 @@ export async function GET(request: NextRequest) {
     headers: { Authorization: `Bearer ${access_token}` },
   })
   const tenants = await tenantsRes.json()
-  console.log('[xero/callback] Tenants:', JSON.stringify(tenants))
+  console.log(`[xero/callback] Found ${tenants.length} tenant(s)`)
 
   // Use first tenant (user will pick in settings if multiple)
   const tenant = tenants[0]
@@ -92,5 +100,7 @@ export async function GET(request: NextRequest) {
   }
 
   console.log(`[xero/callback] ✓ Connected to ${tenant.tenantName}`)
-  return NextResponse.redirect(`${origin}/admin/settings?xero=connected`)
+  const successResponse = NextResponse.redirect(`${origin}/admin/settings?xero=connected`)
+  successResponse.cookies.delete('xero_oauth_state')
+  return successResponse
 }

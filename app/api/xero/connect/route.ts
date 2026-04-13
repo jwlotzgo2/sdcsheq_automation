@@ -22,5 +22,13 @@ export async function GET() {
   url.searchParams.set('scope', scopes)
   url.searchParams.set('state', state)
 
-  return NextResponse.redirect(url.toString())
+  const response = NextResponse.redirect(url.toString())
+  response.cookies.set('xero_oauth_state', state, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 600, // 10 minutes
+  })
+  return response
 }

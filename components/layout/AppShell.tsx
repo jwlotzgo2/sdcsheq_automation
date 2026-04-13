@@ -28,7 +28,7 @@ const MORE_NAV_BASE = [
   { href: '/suppliers',   label: 'Suppliers',   icon: '🏢', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/statements',  label: 'Reconciliation', icon: '📑', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/gl-codes',    label: 'GL Codes',    icon: '📒', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/xero-push',   label: 'Push to Xero',icon: '📤', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/xero-push',   label: 'Push to Xero',icon: '📤', roles: ['APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/expenses',    label: 'Expenses',    icon: '🧾', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/chat',        label: 'Team Chat',   icon: '💬', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/help',        label: 'Help',        icon: '❓', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
@@ -206,7 +206,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <NavItem href="/suppliers"  label="Suppliers"    icon="🏢" />
             {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/statements" label="Reconciliation" icon="📑" />}
             <NavItem href="/gl-codes"   label="GL Codes"     icon="📒" />
-            {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/xero-push"  label="Push to Xero" icon="📤" />}
+            {['APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/xero-push"  label="Push to Xero" icon="📤" />}
             {['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/expenses"  label="Expenses"     icon="🧾" />}
             {['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/chat"      label="Team Chat"    icon="💬" />}
             {canCapture && <NavItem href="/capture" label="Capture" icon="📷" />}

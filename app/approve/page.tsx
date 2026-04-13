@@ -3,6 +3,7 @@
 import { useEffect, useState, memo } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import AppShell from '@/components/layout/AppShell'
+import XeroMatchBanner from '@/components/XeroMatchBanner'
 
 const AMBER  = '#E8960C'
 const DARK   = '#2A2A2A'
@@ -55,6 +56,9 @@ const ApproveDetail = memo(function ApproveDetail({ selected, lines, glCodes, no
           ))}
         </div>
       </div>
+
+      {/* Xero Match Banner */}
+      <XeroMatchBanner invoiceId={selected.id} />
 
       {/* Reviewer note */}
       {reviewerNote && (

@@ -2,7 +2,30 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 
+export const maxDuration = 60
+
 export async function POST(request: NextRequest) {
+  // Verify Postmark webhook signature
+  const webhookToken = process.env.POSTMARK_WEBHOOK_TOKEN
+  if (!webhookToken) {
+    console.error('[inbound] POSTMARK_WEBHOOK_TOKEN not configured')
+    return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
+  }
+
+  const rawBody = await request.text()
+  const signature = request.headers.get('x-postmark-signature') ?? ''
+
+  const expectedSignature = crypto
+    .createHmac('sha256', webhookToken)
+    .update(rawBody)
+    .digest('base64')
+
+  const sigBuffer = Buffer.from(signature)
+  const expectedBuffer = Buffer.from(expectedSignature)
+  if (sigBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
@@ -18,7 +41,7 @@ export async function POST(request: NextRequest) {
 
   let body: any
   try {
-    body = await request.json()
+    body = JSON.parse(rawBody)
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
@@ -28,7 +51,7 @@ export async function POST(request: NextRequest) {
   const subject   = body.Subject ?? ''
   const attachments: any[] = body.Attachments ?? []
 
-  console.log(`[inbound] From: ${sender} | Attachments: ${attachments.length}`)
+  console.log(`[inbound] From: ${sender} | Subject: ${subject} | Attachments: ${attachments.length}`)
 
   await supabase.from('email_ingestion_log').insert({
     postmark_message_id: messageId,
@@ -40,8 +63,7 @@ export async function POST(request: NextRequest) {
 
   const pdfs = attachments.filter((a: any) =>
     a.ContentType === 'application/pdf' ||
-    (a.Name && a.Name.toLowerCase().endsWith('.pdf')) ||
-    (a.Name && a.Name.toLowerCase().endsWith('.PDF'))
+    (a.Name && a.Name.toLowerCase().endsWith('.pdf'))
   )
 
   if (pdfs.length === 0) {
@@ -53,6 +75,7 @@ export async function POST(request: NextRequest) {
 
   const created: string[] = []
   const duplicates: string[] = []
+  const extractionQueue: string[] = []
 
   for (const pdf of pdfs) {
     try {
@@ -66,7 +89,6 @@ export async function POST(request: NextRequest) {
 
       if (existing) {
         console.log(`[inbound] Duplicate detected — matched invoice ${existing.id}`)
-        // Log to duplicate_log
         await supabase.from('duplicate_log').insert({
           received_at: new Date().toISOString(),
           sender,
@@ -126,14 +148,9 @@ export async function POST(request: NextRequest) {
         notes: `Received from ${sender} via Postmark`,
       })
 
-      console.log(`[inbound] ✓ Invoice created: ${invoice.id} — triggering extraction`)
+      console.log(`[inbound] ✓ Invoice created: ${invoice.id}`)
       created.push(invoice.id)
-
-      // Trigger OCR extraction in background
-      const { extractInvoice } = await import('@/lib/claude/extract')
-      extractInvoice(invoice.id).catch(err => {
-        console.error(`[inbound] Extraction error for ${invoice.id}:`, err.message)
-      })
+      extractionQueue.push(invoice.id)
 
     } catch (err: any) {
       console.error('[inbound] Error:', err.message)
@@ -144,11 +161,22 @@ export async function POST(request: NextRequest) {
     .update({ processed: true })
     .eq('postmark_message_id', messageId)
 
+  // Trigger extraction AFTER responding to Postmark
+  // Use fire-and-forget fetch to our own extraction endpoint
+  for (const invoiceId of extractionQueue) {
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'http://localhost:3000'
+    fetch(`${baseUrl}/api/actions/extract`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.INTERNAL_API_KEY || serviceRoleKey },
+      body: JSON.stringify({ invoice_id: invoiceId }),
+    }).catch(err => console.error(`[inbound] Extraction trigger failed for ${invoiceId}:`, err.message))
+  }
+
   return NextResponse.json({
     received: true,
     invoices_created: created.length,
     duplicates_detected: duplicates.length,
-    invoice_ids: created,
-    duplicate_ids: duplicates,
   })
 }

@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { syncPaymentStatus } from '@/lib/xero/sync'
 import { syncGlCodes, syncSuppliers } from '@/lib/xero/client'
+import crypto from 'crypto'
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get('authorization')
+  const authHeader = request.headers.get('authorization') ?? ''
   const cronSecret = process.env.CRON_SECRET
 
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+  if (!cronSecret) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const expected = `Bearer ${cronSecret}`
+  const headerBuf = Buffer.from(authHeader)
+  const expectedBuf = Buffer.from(expected)
+  if (headerBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(headerBuf, expectedBuf)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -45,6 +53,6 @@ export async function GET(request: NextRequest) {
     })
   } catch (err: any) {
     console.error('[cron/xero-sync] Error:', err.message)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return NextResponse.json({ error: 'Sync failed' }, { status: 500 })
   }
 }

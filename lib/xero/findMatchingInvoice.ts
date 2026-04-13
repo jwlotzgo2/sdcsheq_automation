@@ -228,34 +228,44 @@ export async function checkAndStoreXeroMatches(invoiceId: string): Promise<numbe
 
   if (matches.length === 0) {
     console.log(`[xero-match] No matches found for invoice ${invoiceId}`)
+    // Store NO_MATCH so the UI shows the right state
+    await supabase.from('xero_invoice_matches').upsert({
+      invoice_id: invoiceId,
+      match_status: 'NO_MATCH',
+      match_confidence: 0,
+      match_details: {},
+    }, { onConflict: 'invoice_id' })
     return 0
   }
 
-  // Clear any prior match results for this invoice
-  await supabase.from('xero_invoice_matches').delete().eq('invoice_id', invoiceId)
+  // Store the best match (unique index allows only one per invoice)
+  const confidenceMap = { HIGH: 0.95, MEDIUM: 0.70, LOW: 0.40 }
+  const best = matches[0] // already sorted HIGH first
 
-  // Store matches
-  const rows = matches.map(m => ({
+  const row = {
     invoice_id: invoiceId,
-    xero_invoice_id: m.xero_invoice_id,
-    xero_invoice_number: m.xero_invoice_number,
-    xero_contact_name: m.xero_contact_name,
-    xero_contact_id: m.xero_contact_id,
-    xero_date: m.xero_date,
-    xero_due_date: m.xero_due_date,
-    xero_total: m.xero_total,
-    xero_status: m.xero_status,
-    xero_vat_number: m.xero_vat_number,
-    match_confidence: m.match_confidence,
-    match_fields: m.match_fields,
-  }))
+    xero_bill_id: best.xero_invoice_id,
+    xero_bill_number: best.xero_invoice_number,
+    xero_contact_name: best.xero_contact_name,
+    xero_contact_id: best.xero_contact_id,
+    xero_date: best.xero_date,
+    xero_amount: best.xero_total,
+    match_status: 'MATCHED',
+    match_confidence: confidenceMap[best.match_confidence],
+    match_details: {
+      supplier_match: best.match_fields.supplier,
+      invoice_number_match: !!best.xero_invoice_number && best.xero_invoice_number.replace(/\s+/g, '').toLowerCase() === (invoice.invoice_number ?? '').replace(/\s+/g, '').toLowerCase(),
+      date_match: best.match_fields.date,
+      amount_match: best.match_fields.amount,
+    },
+  }
 
-  const { error } = await supabase.from('xero_invoice_matches').insert(rows)
+  const { error } = await supabase.from('xero_invoice_matches').upsert(row, { onConflict: 'invoice_id' })
   if (error) {
-    console.error('[xero-match] Error storing matches:', error.message)
+    console.error('[xero-match] Error storing match:', error.message)
     return 0
   }
 
-  console.log(`[xero-match] Stored ${matches.length} matches for invoice ${invoiceId}`)
+  console.log(`[xero-match] Stored best match (${best.match_confidence}) for invoice ${invoiceId}`)
   return matches.length
 }
