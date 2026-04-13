@@ -27,13 +27,19 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
+  // Allow internal service-to-service calls authenticated via x-api-key
+  const apiKey = request.headers.get('x-api-key')
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const isInternalCall = !!(apiKey && serviceKey && apiKey === serviceKey)
+
   const isPublicPath =
     request.nextUrl.pathname.startsWith('/login') ||
     request.nextUrl.pathname.startsWith('/reset-password') ||
     request.nextUrl.pathname.startsWith('/api/inbound') ||
     request.nextUrl.pathname.startsWith('/api/xero/callback') ||
     request.nextUrl.pathname.startsWith('/api/cron') ||
-    request.nextUrl.pathname.startsWith('/api/actions')
+    request.nextUrl.pathname.startsWith('/api/actions') ||
+    isInternalCall
 
   if (!user && !isPublicPath) {
     // Return 401 for API routes so callers get a proper error response
