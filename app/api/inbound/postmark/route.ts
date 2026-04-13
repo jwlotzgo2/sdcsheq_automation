@@ -5,25 +5,20 @@ import crypto from 'crypto'
 export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
-  // Verify Postmark webhook signature
+  // Verify webhook token via query parameter
+  // Postmark inbound webhooks don't support HMAC signatures,
+  // so we use a secret token in the webhook URL: /api/inbound/postmark?token=xxx
   const webhookToken = process.env.POSTMARK_WEBHOOK_TOKEN
   if (!webhookToken) {
     console.error('[inbound] POSTMARK_WEBHOOK_TOKEN not configured')
     return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
   }
 
-  const rawBody = await request.text()
-  const signature = request.headers.get('x-postmark-signature') ?? ''
-
-  const expectedSignature = crypto
-    .createHmac('sha256', webhookToken)
-    .update(rawBody)
-    .digest('base64')
-
-  const sigBuffer = Buffer.from(signature)
-  const expectedBuffer = Buffer.from(expectedSignature)
-  if (sigBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
-    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+  const urlToken = request.nextUrl.searchParams.get('token') ?? ''
+  const tokenBuf = Buffer.from(urlToken)
+  const expectedBuf = Buffer.from(webhookToken)
+  if (tokenBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(tokenBuf, expectedBuf)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -41,7 +36,7 @@ export async function POST(request: NextRequest) {
 
   let body: any
   try {
-    body = JSON.parse(rawBody)
+    body = await request.json()
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
