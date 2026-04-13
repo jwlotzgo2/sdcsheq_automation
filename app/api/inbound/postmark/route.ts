@@ -159,10 +159,9 @@ export async function POST(request: NextRequest) {
   // Trigger extraction AFTER responding to Postmark
   // Use fire-and-forget fetch to our own extraction endpoint
   for (const invoiceId of extractionQueue) {
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : 'http://localhost:3000'
-    fetch(`${baseUrl}/api/actions/extract`, {
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
+      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+    fetch(`${baseUrl}/api/extract`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.INTERNAL_API_KEY || serviceRoleKey },
       body: JSON.stringify({ invoice_id: invoiceId }),
