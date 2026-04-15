@@ -221,7 +221,7 @@ export async function pushInvoiceToXero(invoiceId: string) {
     Quantity:     line.quantity ?? 1,
     UnitAmount:   line.unit_price ?? line.line_total ?? 0,
     AccountCode:  line.gl_codes?.xero_account_code ?? null,
-    TaxType:      line.vat_rate > 0 ? 'INPUT' : 'NONE',
+    TaxType:      line.vat_rate > 0 ? 'INPUT2' : 'NONE',
   }))
 
   // Fallback if no line items — use invoice totals
@@ -231,7 +231,7 @@ export async function pushInvoiceToXero(invoiceId: string) {
       Quantity:    1,
       UnitAmount:  invoice.amount_excl ?? invoice.amount_incl ?? 0,
       AccountCode: null,
-      TaxType:     invoice.amount_vat > 0 ? 'INPUT' : 'NONE',
+      TaxType:     invoice.amount_vat > 0 ? 'INPUT2' : 'NONE',
     })
   }
 
