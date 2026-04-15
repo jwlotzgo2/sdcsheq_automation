@@ -140,6 +140,68 @@ export async function xeroPost(path: string, body: any) {
   return res.json()
 }
 
+// ---------------------------------------------------------------------------
+// Tax type resolution
+// Different Xero orgs map "INPUT" / "INPUT2" to different effective rates,
+// so we query /TaxRates and pick the active tax type matching the expected
+// VAT rate instead of hardcoding a type code.
+// ---------------------------------------------------------------------------
+
+export interface XeroTaxRate {
+  Name: string
+  TaxType: string
+  EffectiveRate: number
+  DisplayTaxRate: number
+  Status: string
+  CanApplyToExpenses?: boolean
+  CanApplyToAssets?: boolean
+  CanApplyToLiabilities?: boolean
+  CanApplyToEquity?: boolean
+  CanApplyToRevenue?: boolean
+}
+
+let _taxRatesCache: { rates: XeroTaxRate[]; fetchedAt: number } | null = null
+const TAX_RATES_TTL_MS = 10 * 60 * 1000 // 10 min
+
+export async function fetchTaxRates(force = false): Promise<XeroTaxRate[]> {
+  if (!force && _taxRatesCache && Date.now() - _taxRatesCache.fetchedAt < TAX_RATES_TTL_MS) {
+    return _taxRatesCache.rates
+  }
+  const data = await xeroGet('TaxRates')
+  const rates: XeroTaxRate[] = data?.TaxRates ?? []
+  _taxRatesCache = { rates, fetchedAt: Date.now() }
+  return rates
+}
+
+/**
+ * Find the Xero TaxType code for a given effective rate on purchases/expenses.
+ * Falls back to 'INPUT' if no match is found (legacy behavior).
+ */
+export async function getInputTaxType(expectedRate: number): Promise<string> {
+  try {
+    const rates = await fetchTaxRates()
+    // Filter to active tax rates that can apply to expenses
+    const applicable = rates.filter(r =>
+      r.Status === 'ACTIVE' && (r.CanApplyToExpenses ?? true)
+    )
+
+    // Exact match on effective rate first (±0.01 tolerance for float safety)
+    const exact = applicable.find(r => Math.abs(r.EffectiveRate - expectedRate) < 0.01)
+    if (exact) {
+      console.log(`[xero] Tax type for ${expectedRate}% → ${exact.TaxType} (${exact.Name})`)
+      return exact.TaxType
+    }
+
+    // No exact match — log all available options so we can diagnose
+    console.warn(`[xero] No tax rate matching ${expectedRate}%. Active expense-applicable rates:`,
+      applicable.map(r => `${r.TaxType}=${r.EffectiveRate}%`).join(', '))
+    return 'INPUT' // fallback to legacy
+  } catch (err: any) {
+    console.error('[xero] Failed to fetch tax rates, falling back to INPUT:', err.message)
+    return 'INPUT'
+  }
+}
+
 // Sync GL codes (Accounts) from Xero
 export async function syncGlCodes() {
   const supabase = getSupabase()
@@ -215,23 +277,39 @@ export async function pushInvoiceToXero(invoiceId: string) {
     return { alreadyPushed: true, xero_bill_id: existing.xero_bill_id }
   }
 
-  // Build line items
-  const lineItems = (invoice.invoice_line_items ?? []).map((line: any) => ({
-    Description:  line.description ?? 'Invoice line',
-    Quantity:     line.quantity ?? 1,
-    UnitAmount:   line.unit_price ?? line.line_total ?? 0,
-    AccountCode:  line.gl_codes?.xero_account_code ?? null,
-    TaxType:      line.vat_rate > 0 ? 'INPUT2' : 'NONE',
-  }))
+  // Resolve the correct TaxType code by querying Xero's configured rates.
+  // Default to 15% SA VAT; fall back to each line's own vat_rate if set.
+  const DEFAULT_VAT_RATE = 15
+  const inferredLineRate = (rate: number | null | undefined) =>
+    rate && rate > 0 ? rate : DEFAULT_VAT_RATE
+
+  // Build line items — resolve TaxType per line based on its vat_rate
+  const lineItems = await Promise.all(
+    (invoice.invoice_line_items ?? []).map(async (line: any) => {
+      const hasVat = (line.vat_rate ?? 0) > 0 || (invoice.amount_vat ?? 0) > 0
+      const taxType = hasVat
+        ? await getInputTaxType(inferredLineRate(line.vat_rate))
+        : 'NONE'
+      return {
+        Description:  line.description ?? 'Invoice line',
+        Quantity:     line.quantity ?? 1,
+        UnitAmount:   line.unit_price ?? line.line_total ?? 0,
+        AccountCode:  line.gl_codes?.xero_account_code ?? null,
+        TaxType:      taxType,
+      }
+    })
+  )
 
   // Fallback if no line items — use invoice totals
   if (lineItems.length === 0) {
+    const hasVat = (invoice.amount_vat ?? 0) > 0
+    const taxType = hasVat ? await getInputTaxType(DEFAULT_VAT_RATE) : 'NONE'
     lineItems.push({
       Description: `Invoice ${invoice.invoice_number ?? invoiceId}`,
       Quantity:    1,
       UnitAmount:  invoice.amount_excl ?? invoice.amount_incl ?? 0,
       AccountCode: null,
-      TaxType:     invoice.amount_vat > 0 ? 'INPUT2' : 'NONE',
+      TaxType:     taxType,
     })
   }
 
