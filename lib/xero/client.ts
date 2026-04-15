@@ -174,28 +174,44 @@ export async function fetchTaxRates(force = false): Promise<XeroTaxRate[]> {
 }
 
 /**
- * Find the Xero TaxType code for a given effective rate on purchases/expenses.
- * Falls back to 'INPUT' if no match is found (legacy behavior).
+ * Find the Xero TaxType code for a given effective rate on standard-rate
+ * purchases/expenses. Multiple tax rates can share the same effective rate
+ * (e.g. Bad Debt, Change in Use, Capital Goods all 15%), so we prefer the
+ * one named "Standard Rate Purchases" and explicitly exclude special
+ * categories. Falls back to 'INPUT' only if no match is found.
  */
 export async function getInputTaxType(expectedRate: number): Promise<string> {
   try {
     const rates = await fetchTaxRates()
-    // Filter to active tax rates that can apply to expenses
-    const applicable = rates.filter(r =>
-      r.Status === 'ACTIVE' && (r.CanApplyToExpenses ?? true)
+
+    // Active + can apply to expenses + rate matches (±0.01 tolerance for float safety)
+    const candidates = rates.filter(r =>
+      r.Status === 'ACTIVE'
+      && (r.CanApplyToExpenses ?? true)
+      && Math.abs(r.EffectiveRate - expectedRate) < 0.01
     )
 
-    // Exact match on effective rate first (±0.01 tolerance for float safety)
-    const exact = applicable.find(r => Math.abs(r.EffectiveRate - expectedRate) < 0.01)
-    if (exact) {
-      console.log(`[xero] Tax type for ${expectedRate}% → ${exact.TaxType} (${exact.Name})`)
-      return exact.TaxType
+    if (candidates.length === 0) {
+      const allExpense = rates
+        .filter(r => r.Status === 'ACTIVE' && (r.CanApplyToExpenses ?? true))
+        .map(r => `${r.TaxType}=${r.EffectiveRate}%`)
+        .join(', ')
+      console.warn(`[xero] No tax rate matching ${expectedRate}%. Active expense rates: ${allExpense}`)
+      return 'INPUT' // legacy fallback
     }
 
-    // No exact match — log all available options so we can diagnose
-    console.warn(`[xero] No tax rate matching ${expectedRate}%. Active expense-applicable rates:`,
-      applicable.map(r => `${r.TaxType}=${r.EffectiveRate}%`).join(', '))
-    return 'INPUT' // fallback to legacy
+    // Exclude special categories — Bad Debt, Change in Use, Capital Goods,
+    // Second-hand Goods, Imports, Exempt, Zero Rated, Other.
+    const excludePattern = /bad debt|change in use|capital goods|second-?hand|imported|exempt|zero|other/i
+    const standardPattern = /^standard rate purchases$/i
+
+    const best =
+      candidates.find(r => standardPattern.test(r.Name))
+      || candidates.find(r => !excludePattern.test(r.Name))
+      || candidates[0]
+
+    console.log(`[xero] Tax type for ${expectedRate}% → ${best.TaxType} (${best.Name})`)
+    return best.TaxType
   } catch (err: any) {
     console.error('[xero] Failed to fetch tax rates, falling back to INPUT:', err.message)
     return 'INPUT'
