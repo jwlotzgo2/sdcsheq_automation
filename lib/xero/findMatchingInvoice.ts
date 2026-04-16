@@ -3,8 +3,7 @@
 // by supplier name, VAT number, date, and total amount.
 
 import { createClient } from '@supabase/supabase-js'
-import { xeroGet, syncGlCodes, syncSuppliers } from './client'
-import { syncPaymentStatus } from './sync'
+import { xeroGet } from './client'
 
 function getSupabase() {
   return createClient(
@@ -187,64 +186,13 @@ export async function findMatchingInvoices(params: {
   }
 }
 
-// Skip per-invoice sync if the last one completed within this many ms.
-// Protects Xero rate limits (60/min, 5000/day) during ingestion bursts.
-const SYNC_THROTTLE_MS = 5 * 60 * 1000 // 5 minutes
-
-/**
- * Run a full Xero data sync (payments, GL codes, suppliers) in parallel.
- * Throttled by xero_settings.last_sync_at to avoid hammering the Xero API.
- * Failures are logged but do not throw — one failing job shouldn't kill the others.
- */
-async function runFullXeroSync(invoiceId: string): Promise<void> {
-  const supabase = getSupabase()
-
-  // Throttle check — skip if we've synced recently
-  const { data: settings } = await supabase
-    .from('xero_settings')
-    .select('last_sync_at')
-    .eq('id', '00000000-0000-0000-0000-000000000001')
-    .maybeSingle()
-
-  if (settings?.last_sync_at) {
-    const sinceLast = Date.now() - new Date(settings.last_sync_at).getTime()
-    if (sinceLast < SYNC_THROTTLE_MS) {
-      console.log(`[xero-match] Skipping sync for ${invoiceId} — last sync ${Math.round(sinceLast / 1000)}s ago (< ${SYNC_THROTTLE_MS / 1000}s throttle)`)
-      return
-    }
-  }
-
-  console.log(`[xero-match] Running full Xero sync before match for invoice ${invoiceId}`)
-
-  const results = await Promise.allSettled([
-    syncPaymentStatus(),
-    syncGlCodes(),
-    syncSuppliers(),
-  ])
-
-  const names = ['syncPaymentStatus', 'syncGlCodes', 'syncSuppliers']
-  results.forEach((r, i) => {
-    if (r.status === 'rejected') {
-      console.error(`[xero-match] ${names[i]} failed (non-blocking):`, (r as any).reason?.message)
-    }
-  })
-
-  await supabase.from('xero_settings').update({
-    last_sync_at: new Date().toISOString(),
-  }).eq('id', '00000000-0000-0000-0000-000000000001')
-}
-
 /**
  * Run Xero match check for an invoice and store results in DB.
- * Called after extraction completes. First runs a full Xero sync so the match
- * (and the invoice's supplier link) uses the freshest data available.
+ * Called after extraction completes. Relies on the daily cron for fresh
+ * supplier/GL data — no per-invoice sync here.
  */
 export async function checkAndStoreXeroMatches(invoiceId: string): Promise<number> {
   const supabase = getSupabase()
-
-  // Refresh Xero data first — fresh suppliers give us correct VAT for matching
-  // and fresh GL codes/payment statuses keep the rest of the app up to date.
-  await runFullXeroSync(invoiceId)
 
   // Fetch the invoice
   const { data: invoice } = await supabase
