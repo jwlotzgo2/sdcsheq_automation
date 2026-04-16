@@ -139,24 +139,6 @@ export default function InvoiceDetailPage() {
     setLoading(false)
   }
 
-  const [reextracting, setReextracting] = useState(false)
-
-  const handleReextract = async () => {
-    if (!id) return
-    setReextracting(true)
-    try {
-      const res = await fetch('/api/extract', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoice_id: id, reextract: true }),
-      })
-      const data = await res.json()
-      if (data.error) alert(`Re-extraction failed: ${data.error}`)
-      else await fetchData()
-    } catch (err: any) { alert(`Re-extraction failed: ${err.message}`) }
-    setReextracting(false)
-  }
-
   const updateLine = (index: number, field: string, value: any) => {
     setLines(prev => prev.map((l, i) => i === index ? { ...l, [field]: value } : l))
   }
@@ -339,15 +321,6 @@ export default function InvoiceDetailPage() {
           </div>
         </div>
 
-        {/* Re-scan for stuck invoices (mobile) */}
-        {!canReview && (
-          <div style={{ padding: '12px 0' }}>
-            <button onClick={handleReextract} disabled={reextracting} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: `1.5px solid ${BORDER}`, backgroundColor: WHITE, color: MUTED, fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-              {reextracting ? 'Extracting...' : '🔄 Re-scan Invoice'}
-            </button>
-          </div>
-        )}
-
         {/* Sticky action buttons */}
         {canReview && (
           <div style={{ position: 'fixed', bottom: '60px', left: 0, right: 0, padding: '10px 16px', backgroundColor: WHITE, borderTop: `1px solid ${BORDER}`, display: 'flex', gap: '10px', zIndex: 50 }}>
@@ -382,9 +355,6 @@ export default function InvoiceDetailPage() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={handleReextract} disabled={reextracting} style={{ padding: '8px 14px', borderRadius: '7px', border: `1.5px solid ${BORDER}`, backgroundColor: WHITE, color: MUTED, fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>
-              {reextracting ? 'Extracting...' : '🔄 Re-scan'}
-            </button>
             {canReview && (
               <>
                 <button onClick={handleReject} disabled={submitting} style={{ padding: '8px 16px', borderRadius: '7px', border: '1.5px solid #EF4444', backgroundColor: WHITE, color: RED, fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Reject</button>

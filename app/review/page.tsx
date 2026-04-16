@@ -163,6 +163,31 @@ export default function ReviewPage() {
     setCreatingSupplier(false)
   }
 
+  const [findingSupplier, setFindingSupplier] = useState(false)
+  const handleFindSupplier = async () => {
+    if (!selected?.id) return
+    setFindingSupplier(true)
+    try {
+      const res = await fetch('/api/xero/find-supplier', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoice_id: selected.id }),
+      })
+      const data = await res.json()
+      if (data.error) { alert(`Check failed: ${data.error}`); return }
+      if (!data.found) { alert(data.message ?? 'No matching supplier found in Xero'); return }
+      // Add to dropdown (dedupe by id) and auto-select
+      setSuppliers(prev => {
+        const exists = prev.some(s => s.id === data.supplier.id)
+        return exists ? prev : [...prev, data.supplier]
+      })
+      setSelectedSupplier(data.supplier.id)
+    } catch (err: any) {
+      alert(`Check failed: ${err.message}`)
+    }
+    setFindingSupplier(false)
+  }
+
   const handleSubmit = async () => {
     if (!selected) return
     setSubmitting(true)
@@ -354,10 +379,16 @@ export default function ReviewPage() {
                     {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}{s.vat_number ? ` · ${s.vat_number}` : ''}</option>)}
                   </select>
                   {!selectedSupplier && (
-                    <button onClick={() => { setNewSupplierName(selected?.supplier_name ?? ''); setShowCreateSupplier(true) }}
-                      style={{ width: '100%', padding: '10px', borderRadius: '8px', border: `1.5px solid #13B5EA`, backgroundColor: WHITE, color: '#13B5EA', fontSize: '13px', fontWeight: '600', cursor: 'pointer', marginTop: '8px' }}>
-                      + Create supplier in Xero
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                      <button onClick={handleFindSupplier} disabled={findingSupplier}
+                        style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `1.5px solid ${BORDER}`, backgroundColor: WHITE, color: DARK, fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
+                        {findingSupplier ? 'Checking…' : '🔄 Check Xero'}
+                      </button>
+                      <button onClick={() => { setNewSupplierName(selected?.supplier_name ?? ''); setShowCreateSupplier(true) }}
+                        style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `1.5px solid #13B5EA`, backgroundColor: WHITE, color: '#13B5EA', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
+                        + Create
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -572,10 +603,16 @@ export default function ReviewPage() {
                       {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}{s.vat_number ? ` · ${s.vat_number}` : ''}</option>)}
                     </select>
                     {!selectedSupplier && (
-                      <button onClick={() => { setNewSupplierName(selected?.supplier_name ?? ''); setShowCreateSupplier(true) }}
-                        style={{ padding: '5px 10px', borderRadius: '6px', border: `1.5px solid #13B5EA`, backgroundColor: WHITE, color: '#13B5EA', fontSize: '11px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                        + Xero
-                      </button>
+                      <>
+                        <button onClick={handleFindSupplier} disabled={findingSupplier}
+                          style={{ padding: '5px 10px', borderRadius: '6px', border: `1.5px solid ${BORDER}`, backgroundColor: WHITE, color: DARK, fontSize: '11px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                          {findingSupplier ? '…' : '🔄 Check'}
+                        </button>
+                        <button onClick={() => { setNewSupplierName(selected?.supplier_name ?? ''); setShowCreateSupplier(true) }}
+                          style={{ padding: '5px 10px', borderRadius: '6px', border: `1.5px solid #13B5EA`, backgroundColor: WHITE, color: '#13B5EA', fontSize: '11px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                          + Xero
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>

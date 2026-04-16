@@ -15,7 +15,6 @@ export default function XeroMatchBanner({ invoiceId }: XeroMatchBannerProps) {
   const [loading, setLoading] = useState(true)
   const [linking, setLinking] = useState(false)
   const [linked, setLinked] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -36,21 +35,6 @@ export default function XeroMatchBanner({ invoiceId }: XeroMatchBannerProps) {
   useEffect(() => {
     fetchMatch()
   }, [invoiceId])
-
-  const handleRefresh = async () => {
-    setRefreshing(true)
-    try {
-      await fetch('/api/xero/match', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoice_id: invoiceId }),
-      })
-      await fetchMatch()
-    } catch (err) {
-      console.error('Match refresh failed:', err)
-    }
-    setRefreshing(false)
-  }
 
   const handleLink = async () => {
     if (!match) return
@@ -80,14 +64,8 @@ export default function XeroMatchBanner({ invoiceId }: XeroMatchBannerProps) {
   // No match record or pending
   if (!match || match.match_status === 'PENDING') {
     return (
-      <div style={{ backgroundColor: '#F1F5F9', borderRadius: '8px', border: '1px solid #E2E8F0', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '12px', color: '#64748B' }}>Xero match: checking...</span>
-        </div>
-        <button onClick={handleRefresh} disabled={refreshing}
-          style={{ padding: '3px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#fff', color: '#64748B', fontSize: '11px', fontWeight: '600', cursor: 'pointer' }}>
-          {refreshing ? 'Checking...' : 'Check Now'}
-        </button>
+      <div style={{ backgroundColor: '#F1F5F9', borderRadius: '8px', border: '1px solid #E2E8F0', padding: '8px 12px', display: 'flex', alignItems: 'center' }}>
+        <span style={{ fontSize: '12px', color: '#64748B' }}>Xero match: checking...</span>
       </div>
     )
   }
@@ -95,15 +73,9 @@ export default function XeroMatchBanner({ invoiceId }: XeroMatchBannerProps) {
   // No match found
   if (match.match_status === 'NO_MATCH') {
     return (
-      <div style={{ backgroundColor: '#FEF3C7', borderRadius: '8px', border: '1px solid #FDE68A', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '14px' }}>&#9888;</span>
-          <span style={{ fontSize: '12px', color: '#92400E', fontWeight: '600' }}>No matching bill found in Xero</span>
-        </div>
-        <button onClick={handleRefresh} disabled={refreshing}
-          style={{ padding: '3px 10px', borderRadius: '6px', border: '1px solid #FDE68A', backgroundColor: '#fff', color: AMBER, fontSize: '11px', fontWeight: '600', cursor: 'pointer' }}>
-          {refreshing ? 'Checking...' : 'Re-check'}
-        </button>
+      <div style={{ backgroundColor: '#FEF3C7', borderRadius: '8px', border: '1px solid #FDE68A', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <span style={{ fontSize: '14px' }}>&#9888;</span>
+        <span style={{ fontSize: '12px', color: '#92400E', fontWeight: '600' }}>No matching bill found in Xero</span>
       </div>
     )
   }
@@ -136,16 +108,10 @@ export default function XeroMatchBanner({ invoiceId }: XeroMatchBannerProps) {
             Xero match found ({pct}% confidence)
           </span>
         </div>
-        <div style={{ display: 'flex', gap: '6px' }}>
-          <button onClick={handleRefresh} disabled={refreshing}
-            style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid #BBF7D0', backgroundColor: '#fff', color: '#6B7280', fontSize: '10px', cursor: 'pointer' }}>
-            {refreshing ? '...' : 'Refresh'}
-          </button>
-          <button onClick={handleLink} disabled={linking}
-            style={{ padding: '3px 12px', borderRadius: '6px', border: 'none', backgroundColor: OLIVE, color: '#fff', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}>
-            {linking ? 'Linking...' : 'Link to Bill'}
-          </button>
-        </div>
+        <button onClick={handleLink} disabled={linking}
+          style={{ padding: '3px 12px', borderRadius: '6px', border: 'none', backgroundColor: OLIVE, color: '#fff', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}>
+          {linking ? 'Linking...' : 'Link to Bill'}
+        </button>
       </div>
       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', fontSize: '11px', color: '#374151' }}>
         <span>Bill: <strong>{match.xero_bill_number || '—'}</strong></span>
