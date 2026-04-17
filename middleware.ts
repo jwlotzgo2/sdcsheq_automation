@@ -27,10 +27,10 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Allow internal service-to-service calls authenticated via x-api-key
-  const apiKey = request.headers.get('x-api-key')
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  const isInternalCall = !!(apiKey && serviceKey && apiKey === serviceKey)
+  // Allow internal service-to-service calls authenticated via INTERNAL_API_KEY
+  // (DO NOT reuse SUPABASE_SERVICE_ROLE_KEY — separate secret, separate blast radius)
+  const { isInternalCall: checkInternal } = await import('@/lib/auth/internal-api-key')
+  const isInternalCall = checkInternal(request)
 
   const isPublicPath =
     request.nextUrl.pathname.startsWith('/login') ||

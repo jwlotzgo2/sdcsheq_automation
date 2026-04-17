@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
       || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
     fetch(`${baseUrl}/api/extract`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.INTERNAL_API_KEY || serviceRoleKey },
+      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.INTERNAL_API_KEY! },
       body: JSON.stringify({ invoice_id: invoiceId }),
     }).catch(err => console.error(`[inbound] Extraction trigger failed for ${invoiceId}:`, err.message))
   }
