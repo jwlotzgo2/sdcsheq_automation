@@ -277,37 +277,60 @@ export default function UsersPage() {
     setInviting(false)
   }
 
+  const patchUser = async (userId: string, patch: Record<string, unknown>): Promise<boolean> => {
+    const res = await fetch(`/api/admin/users/${userId}/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({ error: res.statusText }))
+      setSaveMsg(`Error: ${data.error ?? 'Update failed'}`)
+      setTimeout(() => setSaveMsg(''), 3000)
+      return false
+    }
+    return true
+  }
+
   const handleRoleChange = async (userId: string, role: string) => {
     setSaving(true)
-    await supabase.from('user_profiles').update({ role }).eq('user_id', userId)
-    setSelected((prev: any) => prev ? { ...prev, role } : prev)
-    setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, role } : u))
-    setSaveMsg('Role updated'); setTimeout(() => setSaveMsg(''), 2000)
+    const ok = await patchUser(userId, { role })
+    if (ok) {
+      setSelected((prev: any) => prev ? { ...prev, role } : prev)
+      setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, role } : u))
+      setSaveMsg('Role updated'); setTimeout(() => setSaveMsg(''), 2000)
+    }
     setSaving(false)
   }
 
   const handleToggleCapture = async (userId: string, current: boolean) => {
     setSaving(true)
-    await supabase.from('user_profiles').update({ can_capture_expenses: !current }).eq('user_id', userId)
-    setSelected((prev: any) => prev ? { ...prev, can_capture_expenses: !current } : prev)
-    setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, can_capture_expenses: !current } : u))
+    const ok = await patchUser(userId, { can_capture_expenses: !current })
+    if (ok) {
+      setSelected((prev: any) => prev ? { ...prev, can_capture_expenses: !current } : prev)
+      setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, can_capture_expenses: !current } : u))
+    }
     setSaving(false)
   }
 
   const handleToggleActive = async (userId: string, isActive: boolean) => {
     setSaving(true)
-    await supabase.from('user_profiles').update({ is_active: !isActive }).eq('user_id', userId)
-    setSelected((prev: any) => prev ? { ...prev, is_active: !isActive } : prev)
-    setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, is_active: !isActive } : u))
+    const ok = await patchUser(userId, { is_active: !isActive })
+    if (ok) {
+      setSelected((prev: any) => prev ? { ...prev, is_active: !isActive } : prev)
+      setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, is_active: !isActive } : u))
+    }
     setSaving(false)
   }
 
   const handleSupplierLink = async (userId: string, supplierId: string) => {
     setSaving(true)
-    await supabase.from('user_profiles').update({ supplier_id: supplierId || null }).eq('user_id', userId)
-    setSelected((prev: any) => prev ? { ...prev, supplier_id: supplierId || null } : prev)
-    setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, supplier_id: supplierId || null } : u))
-    setSaveMsg('Supplier linked'); setTimeout(() => setSaveMsg(''), 2000)
+    const ok = await patchUser(userId, { supplier_id: supplierId || null })
+    if (ok) {
+      setSelected((prev: any) => prev ? { ...prev, supplier_id: supplierId || null } : prev)
+      setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, supplier_id: supplierId || null } : u))
+      setSaveMsg('Supplier linked'); setTimeout(() => setSaveMsg(''), 2000)
+    }
     setSaving(false)
   }
 
