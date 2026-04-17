@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { extractInvoice } from '@/lib/claude/extract'
+import { isInternalCall } from '@/lib/auth/internal-api-key'
+import { requireRole } from '@/lib/auth/require-role'
 
 export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
+  if (!isInternalCall(request)) {
+    const gate = await requireRole(request, 'REVIEWER')
+    if (!gate.ok) return gate.response
+  }
+
   let body: any
   try {
     body = await request.json()

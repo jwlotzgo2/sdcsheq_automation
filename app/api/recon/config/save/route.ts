@@ -1,9 +1,8 @@
 // app/api/recon/config/save/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { ProposedStatementConfig } from '@/lib/types/statement'
+import { requireRole } from '@/lib/auth/require-role'
 
 function getSupabase() {
   return createClient(
@@ -14,25 +13,8 @@ function getSupabase() {
 }
 
 export async function POST(req: NextRequest) {
-  const cookieStore = await cookies()
-  const authClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            try { cookieStore.set(name, value, options) } catch {}
-          })
-        },
-      },
-    }
-  )
-  const { data: { user } } = await authClient.auth.getUser()
-  if (!user?.email) {
-    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
-  }
+  const gate = await requireRole(req, 'REVIEWER')
+  if (!gate.ok) return gate.response
 
   try {
     const body = await req.json()
@@ -57,7 +39,7 @@ export async function POST(req: NextRequest) {
       .upsert(
         {
           supplier_id,
-          trained_by: user.email,
+          trained_by: gate.user.email,
           trained_at: new Date().toISOString(),
           sample_storage_path,
           date_format: config.date_format,

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@supabase/supabase-js'
 import { ProposedStatementConfig } from '@/lib/types/statement'
+import { requireRole } from '@/lib/auth/require-role'
 
 const anthropic = new Anthropic()
 
@@ -54,6 +55,9 @@ Rules:
 - Return null for any field you cannot determine with confidence.`
 
 export async function POST(req: NextRequest) {
+  const gate = await requireRole(req, 'REVIEWER')
+  if (!gate.ok) return gate.response
+
   try {
     const body = await req.json()
     const { storage_path } = body as { storage_path: string }

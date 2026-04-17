@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { requireRole } from '@/lib/auth/require-role'
 
 function getSupabase() {
   return createClient(
@@ -10,8 +11,11 @@ function getSupabase() {
 }
 
 export async function POST(request: NextRequest) {
+  const gate = await requireRole(request, 'REVIEWER')
+  if (!gate.ok) return gate.response
+
   try {
-    const { invoice_id, xero_match_id, user_email } = await request.json()
+    const { invoice_id, xero_match_id } = await request.json()
 
     if (!invoice_id || !xero_match_id) {
       return NextResponse.json({ error: 'invoice_id and xero_match_id required' }, { status: 400 })
@@ -45,7 +49,7 @@ export async function POST(request: NextRequest) {
     // Mark the match as linked
     await supabase.from('xero_invoice_matches').update({
       linked: true,
-      linked_by: user_email ?? 'unknown',
+      linked_by: gate.user.email,
       linked_at: new Date().toISOString(),
     }).eq('id', xero_match_id)
 
@@ -61,7 +65,7 @@ export async function POST(request: NextRequest) {
       invoice_id,
       from_status: invoice.status,
       to_status: 'XERO_POSTED',
-      actor_email: user_email ?? 'system',
+      actor_email: gate.user.email,
       notes: `Linked to existing Xero bill: ${match.xero_invoice_number ?? match.xero_invoice_id} (${match.xero_contact_name}, ${match.xero_status})`,
     })
 

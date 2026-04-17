@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@supabase/supabase-js'
+import { requireRole } from '@/lib/auth/require-role'
 
 const client = new Anthropic()
 
@@ -13,6 +14,9 @@ function getSupabase() {
 }
 
 export async function POST(request: NextRequest) {
+  const gate = await requireRole(request, 'AP_CLERK')
+  if (!gate.ok) return gate.response
+
   try {
     const formData = await request.formData()
     const file = formData.get('file') as File

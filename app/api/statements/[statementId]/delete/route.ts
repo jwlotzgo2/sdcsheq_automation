@@ -1,8 +1,7 @@
 // app/api/statements/[statementId]/delete/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { requireRole } from '@/lib/auth/require-role'
 
 function getSupabase() {
   return createClient(
@@ -16,28 +15,21 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { statementId: string } }
 ) {
-  const cookieStore = await cookies()
-  const authClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            try { cookieStore.set(name, value, options) } catch {}
-          })
-        },
-      },
-    }
-  )
-  const { data: { user } } = await authClient.auth.getUser()
-  if (!user?.email) {
-    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
-  }
+  const gate = await requireRole(req, 'REVIEWER')
+  if (!gate.ok) return gate.response
 
   const { statementId } = params
   const supabase = getSupabase()
+
+  // Confirm the statement exists (returns 404 if not; avoids enumeration)
+  const { data: statement } = await supabase
+    .from('supplier_statements')
+    .select('id')
+    .eq('id', statementId)
+    .maybeSingle()
+  if (!statement) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
 
   // Cascade deletes handle statement_lines, recon_matches, recon_exceptions
   const { error } = await supabase

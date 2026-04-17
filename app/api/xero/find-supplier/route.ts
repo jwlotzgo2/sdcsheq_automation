@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { xeroGet } from '@/lib/xero/client'
+import { requireRole } from '@/lib/auth/require-role'
 
 // Match-only lookup: finds THIS invoice's supplier in Xero by name/VAT,
 // upserts the matched contact into our local suppliers table, and links
@@ -36,6 +37,9 @@ function namesMatch(a: string, b: string): boolean {
 }
 
 export async function POST(request: NextRequest) {
+  const gate = await requireRole(request, 'REVIEWER')
+  if (!gate.ok) return gate.response
+
   try {
     const { invoice_id } = await request.json()
     if (!invoice_id) {

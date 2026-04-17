@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { syncGlCodes, syncSuppliers } from '@/lib/xero/client'
+import { requireRole } from '@/lib/auth/require-role'
 
 export async function POST(request: NextRequest) {
+  const gate = await requireRole(request, 'FINANCE_MANAGER')
+  if (!gate.ok) return gate.response
+
   try {
     const { type } = await request.json()
 

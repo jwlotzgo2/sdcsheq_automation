@@ -1,15 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
+import { requireRole } from '@/lib/auth/require-role'
 
 export async function GET(request: NextRequest) {
-  // Auth check
-  const authClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll() { return request.cookies.getAll() }, setAll() {} } }
-  )
-  const { data: { user } } = await authClient.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireRole(request, 'AP_ADMIN')
+  if (!gate.ok) return gate.response
 
   const postmarkToken = process.env.POSTMARK_SERVER_TOKEN
   if (!postmarkToken) return NextResponse.json({ error: 'POSTMARK_SERVER_TOKEN not configured' }, { status: 500 })
