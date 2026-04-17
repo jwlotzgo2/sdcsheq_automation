@@ -34,3 +34,14 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Security Model
+
+- Authentication is handled by Supabase Auth (session cookies, verified by `middleware.ts`).
+- Authorization is role-based via `user_profiles.role` and the Postgres helper `public.is_role()`. Role hierarchy: `AP_CLERK < REVIEWER < APPROVER < FINANCE_MANAGER < AP_ADMIN`.
+- API routes that mutate data must call `requireRole()` from `lib/auth/require-role.ts` — see `app/api/admin/invite/route.ts` for the canonical example.
+- Server-to-server calls between internal routes use `INTERNAL_API_KEY` (distinct from `SUPABASE_SERVICE_ROLE_KEY`) with a constant-time compare in `lib/auth/internal-api-key.ts`.
+- Postgres RLS enforces role-gated SELECTs on all public tables as a defense-in-depth layer (see `supabase/migrations/006_tighten_rls.sql`). Routes using `SUPABASE_SERVICE_ROLE_KEY` bypass RLS and **must** gate role in code.
+- `user_profiles.role` and `is_active` are NOT updatable via the `authenticated` role — only via SERVICE_ROLE_KEY paths (admin routes). Users can only self-update `full_name`. This prevents self-promotion via the browser client.
+
+To provision a new env, copy `.env.example` to `.env.local` and fill in values. Generate `INTERNAL_API_KEY` and `CRON_SECRET` with `openssl rand -hex 32`.
