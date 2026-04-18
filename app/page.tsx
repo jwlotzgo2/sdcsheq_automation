@@ -33,7 +33,7 @@ const PORTALS = [
     href: '/dashboard',
     color: AMBER,
     bg: '#FEF3C7',
-    roles: ['AP_CLERK', 'REVIEWER', 'APPROVER', 'FINANCE_MANAGER', 'AP_ADMIN'],
+    roles: ['AP_CLERK', 'APPROVER', 'FINANCE_MANAGER', 'AP_ADMIN'],
   },
   {
     id: 'supplier',
@@ -88,7 +88,7 @@ export default function HomePage() {
 
       // Single portal users go straight there
       if (r === 'SUPPLIER') { router.push('/supplier'); return }
-      if (r === 'AP_CLERK' || r === 'REVIEWER' || r === 'APPROVER') { router.push('/dashboard'); return }
+      if (r === 'AP_CLERK' || r === 'APPROVER') { router.push('/dashboard'); return }
 
       setLoading(false)
     }

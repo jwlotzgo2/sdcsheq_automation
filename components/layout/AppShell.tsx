@@ -16,22 +16,22 @@ const LIGHT  = '#F5F5F2'
 const MUTED  = '#8A8878'
 
 const PRIMARY_NAV = [
-  { href: '/',          label: 'Home',     icon: '🏠', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/dashboard', label: 'Dashboard',icon: '▦',  roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/review',    label: 'Review',   icon: '📋', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/',          label: 'Home',     icon: '🏠', roles: ['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/dashboard', label: 'Dashboard',icon: '▦',  roles: ['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/review',    label: 'Review',   icon: '📋', roles: ['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/approve',   label: 'Approve',  icon: '✅', roles: ['APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/invoices',  label: 'Invoices', icon: '🗒', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/invoices',  label: 'Invoices', icon: '🗒', roles: ['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
 ]
 
 const MORE_NAV_BASE = [
   { href: '/duplicates',  label: 'Duplicates',  icon: '⚠️', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/suppliers',   label: 'Suppliers',   icon: '🏢', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/suppliers',   label: 'Suppliers',   icon: '🏢', roles: ['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/statements',  label: 'Reconciliation', icon: '📑', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/gl-codes',    label: 'GL Codes',    icon: '📒', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/gl-codes',    label: 'GL Codes',    icon: '📒', roles: ['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/xero-push',   label: 'Push to Xero',icon: '📤', roles: ['APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/expenses',    label: 'Expenses',    icon: '🧾', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/chat',        label: 'Team Chat',   icon: '💬', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/help',        label: 'Help',        icon: '❓', roles: ['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/expenses',    label: 'Expenses',    icon: '🧾', roles: ['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/chat',        label: 'Team Chat',   icon: '💬', roles: ['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/help',        label: 'Help',        icon: '❓', roles: ['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/admin/users',      label: 'Users',      icon: '👥', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/admin/email-log',  label: 'Email Log',  icon: '📨', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/admin/settings',   label: 'Settings',   icon: '⚙️', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
@@ -200,15 +200,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <NavItem href="/"          label="Home"          icon="🏠" />
             <NavItem href="/dashboard" label="Dashboard"     icon="▦" />
             <NavItem href="/invoices"  label="Invoices"      icon="🗒" />
-            {['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/review"    label="Review Queue"  icon="📋" badge={reviewCount} />}
+            {['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/review"    label="Review Queue"  icon="📋" badge={reviewCount} />}
             {['APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/approve"   label="Approve Queue" icon="✅" badge={approveCount} />}
             {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/duplicates" label="Duplicates"   icon="⚠️" badge={duplicateCount} />}
             <NavItem href="/suppliers"  label="Suppliers"    icon="🏢" />
             {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/statements" label="Reconciliation" icon="📑" />}
             <NavItem href="/gl-codes"   label="GL Codes"     icon="📒" />
             {['APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/xero-push"  label="Push to Xero" icon="📤" />}
-            {['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/expenses"  label="Expenses"     icon="🧾" />}
-            {['AP_CLERK','REVIEWER','APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/chat"      label="Team Chat"    icon="💬" />}
+            {['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/expenses"  label="Expenses"     icon="🧾" />}
+            {['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/chat"      label="Team Chat"    icon="💬" />}
             {canCapture && <NavItem href="/capture" label="Capture" icon="📷" />}
             <NavItem href="/help" label="Help" icon="❓" />
             {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <>

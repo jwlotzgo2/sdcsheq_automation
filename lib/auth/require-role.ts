@@ -2,12 +2,15 @@ import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
-type UserRole = 'AP_CLERK' | 'REVIEWER' | 'APPROVER' | 'FINANCE_MANAGER' | 'AP_ADMIN'
+type UserRole = 'AP_CLERK' | 'APPROVER' | 'FINANCE_MANAGER' | 'AP_ADMIN'
 
-// Mirrors public.is_role() in migration 001 — must stay in sync.
+// App-level role hierarchy. The Postgres enum and is_role() still carry
+// the legacy 'REVIEWER' value (see migration 001), but it is no longer
+// used at the app layer — its former privileges are collapsed into AP_CLERK.
+// Users whose DB role is still 'REVIEWER' would fail the HIERARCHY check
+// below and get 403, which is the intended fail-closed behaviour.
 const HIERARCHY: Record<UserRole, UserRole[]> = {
-  AP_CLERK:        ['AP_CLERK', 'REVIEWER', 'APPROVER', 'FINANCE_MANAGER', 'AP_ADMIN'],
-  REVIEWER:        ['REVIEWER', 'FINANCE_MANAGER', 'AP_ADMIN'],
+  AP_CLERK:        ['AP_CLERK', 'APPROVER', 'FINANCE_MANAGER', 'AP_ADMIN'],
   APPROVER:        ['APPROVER', 'FINANCE_MANAGER', 'AP_ADMIN'],
   FINANCE_MANAGER: ['FINANCE_MANAGER', 'AP_ADMIN'],
   AP_ADMIN:        ['AP_ADMIN'],

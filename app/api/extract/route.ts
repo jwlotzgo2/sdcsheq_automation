@@ -8,7 +8,7 @@ export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
   if (!isInternalCall(request)) {
-    const gate = await requireRole(request, 'REVIEWER')
+    const gate = await requireRole(request, 'AP_CLERK')
     if (!gate.ok) return gate.response
   }
 

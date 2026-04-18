@@ -3,7 +3,7 @@ import { checkAndStoreXeroMatches } from '@/lib/xero/findMatchingInvoice'
 import { requireRole } from '@/lib/auth/require-role'
 
 export async function POST(request: NextRequest) {
-  const gate = await requireRole(request, 'REVIEWER')
+  const gate = await requireRole(request, 'AP_CLERK')
   if (!gate.ok) return gate.response
 
   try {

@@ -13,7 +13,7 @@ function getSupabase() {
 }
 
 export async function POST(req: NextRequest) {
-  const gate = await requireRole(req, 'REVIEWER')
+  const gate = await requireRole(req, 'AP_CLERK')
   if (!gate.ok) return gate.response
 
   try {

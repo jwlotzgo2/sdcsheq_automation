@@ -15,7 +15,7 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { statementId: string } }
 ) {
-  const gate = await requireRole(req, 'REVIEWER')
+  const gate = await requireRole(req, 'AP_CLERK')
   if (!gate.ok) return gate.response
 
   const { statementId } = params

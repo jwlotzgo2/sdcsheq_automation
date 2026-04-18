@@ -37,7 +37,7 @@ function namesMatch(a: string, b: string): boolean {
 }
 
 export async function POST(request: NextRequest) {
-  const gate = await requireRole(request, 'REVIEWER')
+  const gate = await requireRole(request, 'AP_CLERK')
   if (!gate.ok) return gate.response
 
   try {

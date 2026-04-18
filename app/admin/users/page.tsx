@@ -13,7 +13,7 @@ const MUTED  = '#8A8878'
 const WHITE  = '#FFFFFF'
 const RED    = '#EF4444'
 
-const ROLES = ['AP_CLERK', 'REVIEWER', 'APPROVER', 'FINANCE_MANAGER', 'AP_ADMIN', 'SUPPLIER']
+const ROLES = ['AP_CLERK', 'APPROVER', 'FINANCE_MANAGER', 'AP_ADMIN', 'SUPPLIER']
 
 const ROLE_META: Record<string, { color: string; bg: string; label: string; description: string }> = {
   AP_CLERK:        { color: MUTED,     bg: LIGHT,     label: 'AP Clerk',        description: 'Review invoices, assign GL codes' },
@@ -221,7 +221,7 @@ export default function UsersPage() {
   const [currentRole, setCurrentRole] = useState('')
   const [selected, setSelected]       = useState<any>(null)
   const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole]   = useState('REVIEWER')
+  const [inviteRole, setInviteRole]   = useState('AP_CLERK')
   const [inviting, setInviting]       = useState(false)
   const [inviteMsg, setInviteMsg]     = useState('')
   const [saving, setSaving]           = useState(false)

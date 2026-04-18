@@ -5,7 +5,7 @@ import { requireRole } from '@/lib/auth/require-role'
 // Diagnostic endpoint — returns all TaxRates configured in the connected Xero org
 // Use this to verify which TaxType maps to which effective rate (14% vs 15% etc.)
 export async function GET(request: NextRequest) {
-  const gate = await requireRole(request, 'REVIEWER')
+  const gate = await requireRole(request, 'AP_CLERK')
   if (!gate.ok) return gate.response
 
   try {

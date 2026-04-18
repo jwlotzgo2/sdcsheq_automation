@@ -38,7 +38,7 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 ## Security Model
 
 - Authentication is handled by Supabase Auth (session cookies, verified by `middleware.ts`).
-- Authorization is role-based via `user_profiles.role` and the Postgres helper `public.is_role()`. Role hierarchy: `AP_CLERK < REVIEWER < APPROVER < FINANCE_MANAGER < AP_ADMIN`.
+- Authorization is role-based via `user_profiles.role`. App-layer hierarchy: `AP_CLERK < APPROVER < FINANCE_MANAGER < AP_ADMIN`. The Postgres `user_role` enum and the `public.is_role()` helper still carry the legacy `REVIEWER` value; it is not used at the app layer and its former privileges have been collapsed into `AP_CLERK`.
 - API routes that mutate data must call `requireRole()` from `lib/auth/require-role.ts` — see `app/api/admin/invite/route.ts` for the canonical example.
 - Server-to-server calls between internal routes use `INTERNAL_API_KEY` (distinct from `SUPABASE_SERVICE_ROLE_KEY`) with a constant-time compare in `lib/auth/internal-api-key.ts`.
 - Postgres RLS enforces role-gated SELECTs on all public tables as a defense-in-depth layer (see `supabase/migrations/006_tighten_rls.sql`). Routes using `SUPABASE_SERVICE_ROLE_KEY` bypass RLS and **must** gate role in code.

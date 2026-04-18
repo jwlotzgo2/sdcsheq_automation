@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { requireRole } from '@/lib/auth/require-role'
 
 type Patch = {
-  role?: 'AP_CLERK' | 'REVIEWER' | 'APPROVER' | 'FINANCE_MANAGER' | 'AP_ADMIN'
+  role?: 'AP_CLERK' | 'APPROVER' | 'FINANCE_MANAGER' | 'AP_ADMIN'
   is_active?: boolean
   can_capture_expenses?: boolean
   supplier_id?: string | null
