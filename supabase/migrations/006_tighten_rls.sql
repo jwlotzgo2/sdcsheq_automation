@@ -1,74 +1,86 @@
 -- ============================================================
 -- Migration: 006_tighten_rls.sql
--- Purpose:   Replace permissive "USING (true)" policies from 001
---            with role-gated policies, remove forgeable audit inserts,
---            and restrict user_profiles UPDATEs to non-privileged
---            columns (prevents self-promotion via RLS bypass).
+-- Purpose:   Replace permissive "USING (true)" / "WITH CHECK (true)"
+--            policies with role-gated policies, and restrict
+--            user_profiles UPDATE at the column level to prevent
+--            self-promotion to AP_ADMIN.
 --
--- Note:      Routes using SUPABASE_SERVICE_ROLE_KEY still bypass
---            RLS. They MUST enforce role in application code
---            (see lib/auth/require-role.ts).
+-- Note:      Production policy names are tracked here as they
+--            actually exist (NOT the names from migration 001 —
+--            the DB has drifted from that file). Routes using
+--            SUPABASE_SERVICE_ROLE_KEY still bypass RLS and MUST
+--            enforce role in application code (see
+--            lib/auth/require-role.ts).
 -- ============================================================
 
 -- ── invoices ────────────────────────────────────────────────
-drop policy if exists "Authenticated users can view invoices" on public.invoices;
-drop policy if exists "Service role can insert invoices" on public.invoices;
+-- Drop the USING(true) SELECT and WITH CHECK(true) INSERT policies.
+drop policy if exists "invoices_select" on public.invoices;
+drop policy if exists "invoices_insert" on public.invoices;
 
-create policy "Internal users can view invoices"
+create policy "invoices_select"
   on public.invoices for select
   to authenticated
   using (public.is_role('AP_CLERK'));
 
--- Inserts happen via SERVICE_ROLE_KEY (extract, postmark). No
--- "authenticated" INSERT policy needed — service role bypasses RLS.
+-- INSERT happens via SERVICE_ROLE_KEY (postmark, invoice-upload,
+-- extract). No authenticated INSERT policy needed.
 
 -- ── invoice_line_items ──────────────────────────────────────
-drop policy if exists "Authenticated users can view line items" on public.invoice_line_items;
+drop policy if exists "line_items_select" on public.invoice_line_items;
 
-create policy "Internal users can view line items"
+create policy "line_items_select"
   on public.invoice_line_items for select
   to authenticated
   using (public.is_role('AP_CLERK'));
 
 -- ── ocr_extractions ─────────────────────────────────────────
-drop policy if exists "Authenticated users can view OCR data" on public.ocr_extractions;
+drop policy if exists "ocr_select" on public.ocr_extractions;
 
-create policy "Internal users can view OCR data"
+create policy "ocr_select"
   on public.ocr_extractions for select
   to authenticated
   using (public.is_role('AP_CLERK'));
 
 -- ── audit_trail ─────────────────────────────────────────────
-drop policy if exists "Authenticated users can view audit trail" on public.audit_trail;
-drop policy if exists "Authenticated users can insert audit entries" on public.audit_trail;
+-- Drop both: USING(true) SELECT and WITH CHECK(true) INSERT.
+-- INSERTs come from service-role paths; non-admins have no read access.
+drop policy if exists "audit_select" on public.audit_trail;
+drop policy if exists "audit_insert" on public.audit_trail;
 
-create policy "Admins can view audit trail"
+create policy "audit_select"
   on public.audit_trail for select
   to authenticated
   using (public.is_role('AP_ADMIN'));
 
--- Inserts are service-role only — no authenticated INSERT policy,
--- so authed users cannot forge entries.
+-- No authenticated INSERT policy — service role writes bypass RLS,
+-- so authed users cannot forge audit entries.
 
 -- ── suppliers ───────────────────────────────────────────────
-drop policy if exists "Authenticated users can view suppliers" on public.suppliers;
+drop policy if exists "suppliers_select" on public.suppliers;
 
-create policy "Internal users can view suppliers"
+create policy "suppliers_select"
   on public.suppliers for select
   to authenticated
   using (public.is_role('AP_CLERK'));
 
 -- ── gl_codes ────────────────────────────────────────────────
-drop policy if exists "Authenticated users can view GL codes" on public.gl_codes;
+drop policy if exists "gl_codes_select" on public.gl_codes;
 
-create policy "Internal users can view GL codes"
+create policy "gl_codes_select"
   on public.gl_codes for select
   to authenticated
   using (public.is_role('AP_CLERK'));
 
 -- ── user_profiles column-level restriction ──────────────────
 -- Prevents self-promotion: authenticated users can only UPDATE
--- the full_name column on their own row (RLS on user_id stays).
--- role and is_active changes must go through SERVICE_ROLE_KEY paths.
+-- the full_name column on their own row. The existing
+-- user_profiles_update_own RLS policy (user_id = auth.uid())
+-- continues to gate which rows — but combined with column-level
+-- GRANT, only full_name is writable from the authenticated role.
+--
+-- Role / is_active / can_capture_expenses / supplier_id changes
+-- must go through SERVICE_ROLE_KEY server routes (see
+-- app/api/admin/users/[userId]/update/route.ts).
 revoke update on public.user_profiles from authenticated;
 grant update (full_name) on public.user_profiles to authenticated;
