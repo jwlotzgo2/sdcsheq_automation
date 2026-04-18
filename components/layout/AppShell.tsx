@@ -20,21 +20,63 @@ const PRIMARY_NAV = [
   { href: '/dashboard', label: 'Dashboard',icon: '▦',  roles: ['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/review',    label: 'Review',   icon: '📋', roles: ['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
   { href: '/approve',   label: 'Approve',  icon: '✅', roles: ['APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/invoices',  label: 'Invoices', icon: '🗒', roles: ['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
+  { href: '/invoices',  label: 'Invoice Listing', icon: '🗒', roles: ['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
 ]
 
-const MORE_NAV_BASE = [
-  { href: '/duplicates',  label: 'Duplicates',  icon: '⚠️', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/suppliers',   label: 'Suppliers',   icon: '🏢', roles: ['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/statements',  label: 'Reconciliation', icon: '📑', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/gl-codes',    label: 'GL Codes',    icon: '📒', roles: ['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/xero-push',   label: 'Push to Xero',icon: '📤', roles: ['APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/expenses',    label: 'Expenses',    icon: '🧾', roles: ['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/chat',        label: 'Team Chat',   icon: '💬', roles: ['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/help',        label: 'Help',        icon: '❓', roles: ['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/admin/users',      label: 'Users',      icon: '👥', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/admin/email-log',  label: 'Email Log',  icon: '📨', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
-  { href: '/admin/settings',   label: 'Settings',   icon: '⚙️', roles: ['FINANCE_MANAGER','AP_ADMIN'] },
+type NavItemDef = { href: string; label: string; icon: string; roles: string[] }
+type NavSection = { heading: string; items: NavItemDef[] }
+
+const INTERNAL_ROLES = ['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN']
+const MANAGER_ROLES  = ['FINANCE_MANAGER','AP_ADMIN']
+const APPROVER_UP    = ['APPROVER','FINANCE_MANAGER','AP_ADMIN']
+
+// Mirrors the sidebar structure used in both desktop nav and mobile drawer.
+// "Main" items that live in the mobile bottom bar (PRIMARY_NAV) are NOT included here.
+const MORE_NAV_SECTIONS: NavSection[] = [
+  {
+    heading: 'Main',
+    items: [
+      { href: '/expenses',  label: 'Expense Listing', icon: '🧾', roles: INTERNAL_ROLES },
+      { href: '/xero-push', label: 'Submit to Xero',  icon: '📤', roles: APPROVER_UP },
+      { href: '/chat',      label: 'Team Chat',       icon: '💬', roles: INTERNAL_ROLES },
+      { href: '/help',      label: 'Help',            icon: '❓', roles: INTERNAL_ROLES },
+    ],
+  },
+  {
+    heading: 'Manual Submission',
+    items: [
+      // Expense Capture is gated client-side by canCapture — injected into this section
+      // at render time (see drawer body), NOT listed here.
+      { href: '/invoice-upload', label: 'Invoice Upload', icon: '📥', roles: INTERNAL_ROLES },
+    ],
+  },
+  {
+    heading: 'Master Data',
+    items: [
+      { href: '/suppliers', label: 'Supplier Listing', icon: '🏢', roles: INTERNAL_ROLES },
+      { href: '/gl-codes',  label: 'GL Code Listing',  icon: '📒', roles: INTERNAL_ROLES },
+    ],
+  },
+  {
+    heading: 'Data Quality Audit',
+    items: [
+      { href: '/duplicates', label: 'Duplicate Listing', icon: '⚠️', roles: MANAGER_ROLES },
+    ],
+  },
+  {
+    heading: 'Supplier Reconciliation',
+    items: [
+      { href: '/statements', label: 'Supplier Recon', icon: '📑', roles: MANAGER_ROLES },
+    ],
+  },
+  {
+    heading: 'Admin',
+    items: [
+      { href: '/admin/users',     label: 'Users',    icon: '👥', roles: MANAGER_ROLES },
+      { href: '/admin/email-log', label: 'Email Log',icon: '📨', roles: MANAGER_ROLES },
+      { href: '/admin/settings',  label: 'Settings', icon: '⚙️', roles: MANAGER_ROLES },
+    ],
+  },
 ]
 
 
@@ -196,26 +238,40 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <nav style={{ padding: '12px 0', flex: 1 }}>
             {role && <>
+            {/* Main */}
             {!collapsed && <div style={{ padding: '0 12px 6px', color: 'rgba(255,255,255,0.3)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Main</div>}
-            <NavItem href="/"          label="Home"          icon="🏠" />
-            <NavItem href="/dashboard" label="Dashboard"     icon="▦" />
-            <NavItem href="/invoices"  label="Invoices"      icon="🗒" />
-            {['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/review"    label="Review Queue"  icon="📋" badge={reviewCount} />}
-            {['APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/approve"   label="Approve Queue" icon="✅" badge={approveCount} />}
-            {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/duplicates" label="Duplicates"   icon="⚠️" badge={duplicateCount} />}
-            <NavItem href="/suppliers"  label="Suppliers"    icon="🏢" />
-            {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/statements" label="Reconciliation" icon="📑" />}
-            <NavItem href="/gl-codes"   label="GL Codes"     icon="📒" />
-            {['APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/xero-push"  label="Push to Xero" icon="📤" />}
-            {['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/expenses"  label="Expenses"     icon="🧾" />}
-            {['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN'].includes(role) && <NavItem href="/chat"      label="Team Chat"    icon="💬" />}
-            {canCapture && <NavItem href="/capture" label="Capture" icon="📷" />}
+            <NavItem href="/"          label="Home"            icon="🏠" />
+            <NavItem href="/dashboard" label="Dashboard"       icon="▦" />
+            <NavItem href="/invoices"  label="Invoice Listing" icon="🗒" />
+            <NavItem href="/expenses"  label="Expense Listing" icon="🧾" />
+            <NavItem href="/review"    label="Review Queue"    icon="📋" badge={reviewCount} />
+            {APPROVER_UP.includes(role) && <NavItem href="/approve"   label="Approve Queue" icon="✅" badge={approveCount} />}
+            {APPROVER_UP.includes(role) && <NavItem href="/xero-push" label="Submit to Xero" icon="📤" />}
+            <NavItem href="/chat" label="Team Chat" icon="💬" />
             <NavItem href="/help" label="Help" icon="❓" />
-            {['FINANCE_MANAGER','AP_ADMIN'].includes(role) && <>
+
+            {/* Manual Submission */}
+            {!collapsed && <div style={{ padding: '12px 12px 6px', color: 'rgba(255,255,255,0.3)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '8px' }}>Manual Submission</div>}
+            {canCapture && <NavItem href="/capture" label="Expense Capture" icon="📷" />}
+            <NavItem href="/invoice-upload" label="Invoice Upload" icon="📥" />
+
+            {/* Master Data */}
+            {!collapsed && <div style={{ padding: '12px 12px 6px', color: 'rgba(255,255,255,0.3)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '8px' }}>Master Data</div>}
+            <NavItem href="/suppliers" label="Supplier Listing" icon="🏢" />
+            <NavItem href="/gl-codes"  label="GL Code Listing"  icon="📒" />
+
+            {/* Data Quality Audit + Supplier Reconciliation + Admin — all MANAGER_ROLES */}
+            {MANAGER_ROLES.includes(role) && <>
+              {!collapsed && <div style={{ padding: '12px 12px 6px', color: 'rgba(255,255,255,0.3)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '8px' }}>Data Quality Audit</div>}
+              <NavItem href="/duplicates" label="Duplicate Listing" icon="⚠️" badge={duplicateCount} />
+
+              {!collapsed && <div style={{ padding: '12px 12px 6px', color: 'rgba(255,255,255,0.3)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '8px' }}>Supplier Reconciliation</div>}
+              <NavItem href="/statements" label="Supplier Recon" icon="📑" />
+
               {!collapsed && <div style={{ padding: '12px 12px 6px', color: 'rgba(255,255,255,0.3)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '8px' }}>Admin</div>}
-              <NavItem href="/admin/users"      label="Users"      icon="👥" />
-              <NavItem href="/admin/email-log"  label="Email Log"  icon="📨" />
-              <NavItem href="/admin/settings" label="Settings" icon="⚙️" />
+              <NavItem href="/admin/users"     label="Users"     icon="👥" />
+              <NavItem href="/admin/email-log" label="Email Log" icon="📨" />
+              <NavItem href="/admin/settings"  label="Settings"  icon="⚙️" />
             </>}
             </>}
           </nav>
@@ -303,27 +359,45 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {/* Handle */}
             <div style={{ width: '40px', height: '4px', backgroundColor: BORDER, borderRadius: '2px', margin: '0 auto 16px' }} />
 
-            <div style={{ padding: '0 8px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
-              {[...MORE_NAV_BASE.filter(i => role && i.roles.includes(role)), ...(canCapture ? [{ href: '/capture', label: 'Capture', icon: '📷', roles: [] }] : [])].map(({ href, label, icon }) => {
-                const badge  = getBadge(href)
-                const active = isActive(href)
+            <div style={{ padding: '0 8px' }}>
+              {MORE_NAV_SECTIONS.map((section) => {
+                // Filter items by role
+                const items = section.items.filter(i => role && i.roles.includes(role))
+                // Inject Expense Capture into Manual Submission if canCapture
+                const sectionItems = section.heading === 'Manual Submission' && canCapture
+                  ? [{ href: '/capture', label: 'Expense Capture', icon: '📷', roles: [] as string[] }, ...items]
+                  : items
+                if (sectionItems.length === 0) return null
                 return (
-                  <Link key={href} href={href} style={{ textDecoration: 'none' }} onClick={() => setDrawerOpen(false)}>
-                    <div style={{
-                      display: 'flex', alignItems: 'center', gap: '12px',
-                      padding: '14px 16px', borderRadius: '10px',
-                      backgroundColor: active ? '#FEF3C7' : LIGHT,
-                      position: 'relative',
-                    }}>
-                      <span style={{ fontSize: '20px' }}>{icon}</span>
-                      <span style={{ fontSize: '14px', fontWeight: active ? '700' : '500', color: active ? AMBER : DARK }}>{label}</span>
-                      {badge > 0 && (
-                        <span style={{ marginLeft: 'auto', backgroundColor: '#EF4444', color: WHITE, fontSize: '10px', fontWeight: '700', borderRadius: '8px', padding: '1px 6px' }}>
-                          {badge}
-                        </span>
-                      )}
+                  <div key={section.heading} style={{ marginBottom: '12px' }}>
+                    <div style={{ padding: '8px 8px 4px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: MUTED }}>
+                      {section.heading}
                     </div>
-                  </Link>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+                      {sectionItems.map(({ href, label, icon }) => {
+                        const badge  = getBadge(href)
+                        const active = isActive(href)
+                        return (
+                          <Link key={href} href={href} style={{ textDecoration: 'none' }} onClick={() => setDrawerOpen(false)}>
+                            <div style={{
+                              display: 'flex', alignItems: 'center', gap: '12px',
+                              padding: '14px 16px', borderRadius: '10px',
+                              backgroundColor: active ? '#FEF3C7' : LIGHT,
+                              position: 'relative',
+                            }}>
+                              <span style={{ fontSize: '20px' }}>{icon}</span>
+                              <span style={{ fontSize: '14px', fontWeight: active ? '700' : '500', color: active ? AMBER : DARK }}>{label}</span>
+                              {badge > 0 && (
+                                <span style={{ marginLeft: 'auto', backgroundColor: '#EF4444', color: WHITE, fontSize: '10px', fontWeight: '700', borderRadius: '8px', padding: '1px 6px' }}>
+                                  {badge}
+                                </span>
+                              )}
+                            </div>
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  </div>
                 )
               })}
             </div>
