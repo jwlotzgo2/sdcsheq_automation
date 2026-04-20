@@ -53,7 +53,7 @@ const PORTALS = [
     href: '/admin',
     color: PURPLE,
     bg: '#F5F3FF',
-    roles: ['AP_ADMIN', 'FINANCE_MANAGER'],
+    roles: ['AP_ADMIN', 'FINANCE_MANAGER', 'APPROVER'],
   },
 ]
 

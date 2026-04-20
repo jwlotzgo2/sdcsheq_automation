@@ -90,7 +90,7 @@ export default function AdminPage() {
       if (!user) return
       const { data: profile } = await supabase
         .from('user_profiles').select('role').eq('email', user.email).maybeSingle()
-      if (!['AP_ADMIN', 'FINANCE_MANAGER'].includes(profile?.role ?? '')) { router.push('/'); return }
+      if (!['AP_ADMIN', 'FINANCE_MANAGER', 'APPROVER'].includes(profile?.role ?? '')) { router.push('/'); return }
 
       const [{ data: userList }, { data: xero }, { data: auditData }] = await Promise.all([
         supabase.from('user_profiles').select('user_id, email, full_name, role, is_active, can_capture_expenses, created_at').order('created_at'),

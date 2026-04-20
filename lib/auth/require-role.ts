@@ -9,10 +9,14 @@ type UserRole = 'AP_CLERK' | 'APPROVER' | 'FINANCE_MANAGER' | 'AP_ADMIN'
 // used at the app layer — its former privileges are collapsed into AP_CLERK.
 // Users whose DB role is still 'REVIEWER' would fail the HIERARCHY check
 // below and get 403, which is the intended fail-closed behaviour.
+//
+// APPROVER is elevated to FINANCE_MANAGER parity at the app layer: any
+// requireRole('FINANCE_MANAGER') gate (Xero push/sync/create-supplier,
+// statements, duplicates, admin nav) is satisfied by APPROVER as well.
 const HIERARCHY: Record<UserRole, UserRole[]> = {
   AP_CLERK:        ['AP_CLERK', 'APPROVER', 'FINANCE_MANAGER', 'AP_ADMIN'],
   APPROVER:        ['APPROVER', 'FINANCE_MANAGER', 'AP_ADMIN'],
-  FINANCE_MANAGER: ['FINANCE_MANAGER', 'AP_ADMIN'],
+  FINANCE_MANAGER: ['APPROVER', 'FINANCE_MANAGER', 'AP_ADMIN'],
   AP_ADMIN:        ['AP_ADMIN'],
 }
 

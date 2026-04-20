@@ -27,7 +27,7 @@ type NavItemDef = { href: string; label: string; icon: string; roles: string[] }
 type NavSection = { heading: string; items: NavItemDef[] }
 
 const INTERNAL_ROLES = ['AP_CLERK','APPROVER','FINANCE_MANAGER','AP_ADMIN']
-const MANAGER_ROLES  = ['FINANCE_MANAGER','AP_ADMIN']
+const MANAGER_ROLES  = ['APPROVER','FINANCE_MANAGER','AP_ADMIN']
 const APPROVER_UP    = ['APPROVER','FINANCE_MANAGER','AP_ADMIN']
 
 // Mirrors the sidebar structure used in both desktop nav and mobile drawer.

@@ -150,7 +150,7 @@ export default function StatementDetailPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
     const { data: profile } = await supabase.from('user_profiles').select('role').eq('email', user.email).maybeSingle()
-    if (!['AP_ADMIN', 'FINANCE_MANAGER'].includes(profile?.role ?? '')) { router.push('/'); return }
+    if (!['AP_ADMIN', 'FINANCE_MANAGER', 'APPROVER'].includes(profile?.role ?? '')) { router.push('/'); return }
 
     try {
       const { data: stmt, error: stmtErr } = await supabase

@@ -89,7 +89,7 @@ export default function EmailLogPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
     const { data: profile } = await supabase.from('user_profiles').select('role').eq('email', user.email).maybeSingle()
-    if (!['AP_ADMIN', 'FINANCE_MANAGER'].includes(profile?.role ?? '')) { router.push('/'); return }
+    if (!['AP_ADMIN', 'FINANCE_MANAGER', 'APPROVER'].includes(profile?.role ?? '')) { router.push('/'); return }
 
     // Fetch both sources in parallel
     const [postmarkRes, { data: emailLogs }, { data: emailInvoices }] = await Promise.all([
