@@ -173,12 +173,13 @@ export default function AdminPage() {
         </div>
 
         {/* Quick links */}
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: '10px', marginBottom: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(5,1fr)', gap: '10px', marginBottom: '20px' }}>
           {[
-            { label: 'Users',        href: '/admin/users',        icon: '👥', color: PURPLE },
-            { label: 'Settings',     href: '/admin/settings',     icon: '⚙️', color: DARK },
-            { label: 'Cost Centres', href: '/admin/cost-centres', icon: '🏷️', color: OLIVE },
-            { label: 'Suppliers',    href: '/suppliers',          icon: '🏢', color: TEAL },
+            { label: 'Users',          href: '/admin/users',           icon: '👥', color: PURPLE },
+            { label: 'Settings',       href: '/admin/settings',        icon: '⚙️', color: DARK },
+            { label: 'Cost Centres',   href: '/admin/cost-centres',    icon: '🏷️', color: OLIVE },
+            { label: 'Suppliers',      href: '/suppliers',             icon: '🏢', color: TEAL },
+            { label: 'Stuck Invoices', href: '/admin/stuck-invoices',  icon: '🛟', color: RED },
           ].map(({ label, href, icon, color }) => (
             <div key={href} onClick={() => router.push(href)}
               style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, padding: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}

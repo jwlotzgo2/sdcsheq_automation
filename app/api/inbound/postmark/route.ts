@@ -156,16 +156,45 @@ export async function POST(request: NextRequest) {
     .update({ processed: true })
     .eq('postmark_message_id', messageId)
 
-  // Trigger extraction AFTER responding to Postmark
-  // Use fire-and-forget fetch to our own extraction endpoint
-  for (const invoiceId of extractionQueue) {
+  // Trigger extraction inline BEFORE responding to Postmark.
+  // Previously this was a fire-and-forget fetch; on Vercel Fluid Compute the
+  // runtime can terminate after the response flush and cut the in-flight TCP
+  // connection — which is how invoice 9951ee36 ended up stuck at INGESTED on
+  // 2026-04-21 despite the webhook reporting success. Awaiting the extraction
+  // call in-process guarantees it either completes or logs a concrete error.
+  //
+  // Postmark's inbound webhook tolerates up to ~10s response latency; each
+  // invoice's extraction currently takes ~3-5s (Claude vision on a single
+  // PDF), so we issue them in parallel and cap the overall wait.
+  if (extractionQueue.length > 0) {
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
       || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
-    fetch(`${baseUrl}/api/extract`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.INTERNAL_API_KEY! },
-      body: JSON.stringify({ invoice_id: invoiceId }),
-    }).catch(err => console.error(`[inbound] Extraction trigger failed for ${invoiceId}:`, err.message))
+
+    const triggers = extractionQueue.map((invoiceId) =>
+      fetch(`${baseUrl}/api/extract`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.INTERNAL_API_KEY! },
+        body: JSON.stringify({ invoice_id: invoiceId }),
+      })
+        .then(async (res) => {
+          if (!res.ok) {
+            const text = await res.text().catch(() => '')
+            console.error(`[inbound] Extraction HTTP ${res.status} for ${invoiceId}: ${text.slice(0, 200)}`)
+          } else {
+            console.log(`[inbound] ✓ Extraction triggered for ${invoiceId}`)
+          }
+        })
+        .catch((err) => console.error(`[inbound] Extraction trigger failed for ${invoiceId}:`, err.message)),
+    )
+
+    // Best-effort: cap at 25s total so we stay well under Postmark's timeout.
+    // If extraction is still running past the cap we fall through — the
+    // invoice stays at INGESTED and the admin stuck-invoices page can
+    // re-trigger it manually. This is strictly better than fire-and-forget.
+    await Promise.race([
+      Promise.allSettled(triggers),
+      new Promise((resolve) => setTimeout(resolve, 25_000)),
+    ])
   }
 
   return NextResponse.json({
