@@ -67,13 +67,32 @@ function SignInForm({ dark }: { dark?: boolean }) {
   const [password, setPassword]     = useState('')
   const [loading, setLoading]       = useState(false)
   const [error, setError]           = useState('')
+  const [needsSetup, setNeedsSetup] = useState(false)
   const [showForgot, setShowForgot] = useState(false)
   const [resetSent, setResetSent]   = useState(false)
+  const [cooldown, setCooldown]     = useState(0) // seconds until next resend allowed
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
+
+  // Surface ?error=link_expired from /api/auth/callback or /auth/confirm,
+  // and pre-open the forgot-password view so the user can immediately resend.
+  useEffect(() => {
+    const qs = new URLSearchParams(window.location.search)
+    if (qs.get('error') === 'link_expired') {
+      setShowForgot(true)
+      setError('That link has expired or was already used. Enter your email to get a fresh one.')
+    }
+  }, [])
+
+  // Tick down the resend cooldown once per second.
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const t = setTimeout(() => setCooldown(c => Math.max(0, c - 1)), 1000)
+    return () => clearTimeout(t)
+  }, [cooldown])
 
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '12px 14px', fontSize: '16px',
@@ -98,20 +117,50 @@ function SignInForm({ dark }: { dark?: boolean }) {
 
   const handleLogin = async () => {
     if (!email || !password) return
-    setLoading(true); setError('')
+    setLoading(true); setError(''); setNeedsSetup(false)
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) { setError(error.message); setLoading(false) }
-    else window.location.href = '/'
+    if (error) {
+      // Supabase returns the generic "Invalid login credentials" both for a
+      // wrong password AND for accounts that were invited but never set a
+      // password. Guide the user toward "Forgot password" in that case.
+      const code = (error as unknown as { code?: string }).code
+      if (code === 'invalid_credentials' || /invalid login credentials/i.test(error.message)) {
+        setNeedsSetup(true)
+        setError("Incorrect email or password. If you were just invited and haven't set a password yet, use “Forgot password” below to get a link.")
+      } else {
+        setError(error.message)
+      }
+      setLoading(false)
+    } else {
+      window.location.href = '/'
+    }
   }
 
   const handleForgot = async () => {
     if (!email) { setError('Please enter your email address first.'); return }
+    if (cooldown > 0) return
     setLoading(true); setError('')
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/api/auth/callback?next=/reset-password`,
+      // Route through /auth/confirm (token_hash flow) so email-client prefetch
+      // can't burn the token. Keep /api/auth/callback working for legacy links.
+      redirectTo: `${window.location.origin}/auth/confirm?next=/reset-password`,
     })
-    if (error) { setError(error.message); setLoading(false) }
-    else { setResetSent(true); setLoading(false) }
+    if (error) {
+      // Surface the 19/60s anti-abuse window politely and start the countdown.
+      const msg = error.message || ''
+      const match = msg.match(/after\s+(\d+)\s+seconds/i)
+      if (match) {
+        setCooldown(parseInt(match[1], 10))
+        setError(`Please wait a moment before requesting another link.`)
+      } else {
+        setError(msg)
+      }
+      setLoading(false)
+    } else {
+      setResetSent(true)
+      setCooldown(60)
+      setLoading(false)
+    }
   }
 
   if (!showForgot) return (
@@ -136,7 +185,17 @@ function SignInForm({ dark }: { dark?: boolean }) {
           Forgot password?
         </button>
       </div>
-      {error && <div style={{ backgroundColor: '#FEE2E2', borderRadius: '8px', padding: '10px 12px', marginBottom: '14px', fontSize: '13px', color: '#C0392B' }}>{error}</div>}
+      {error && (
+        <div style={{ backgroundColor: '#FEE2E2', borderRadius: '8px', padding: '10px 12px', marginBottom: '14px', fontSize: '13px', color: '#C0392B' }}>
+          <div>{error}</div>
+          {needsSetup && (
+            <button onClick={() => { setShowForgot(true); setError(''); setNeedsSetup(false) }}
+              style={{ marginTop: '8px', background: 'none', border: 'none', color: '#C0392B', fontSize: '13px', fontWeight: '700', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}>
+              Send me a reset link →
+            </button>
+          )}
+        </div>
+      )}
       <button onClick={handleLogin} disabled={loading || !email || !password}
         style={{ width: '100%', padding: '13px', backgroundColor: loading || !email || !password ? (dark ? '#5A4A2A' : '#C8B89A') : AMBER, color: '#fff', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: '700', cursor: 'pointer' }}>
         {loading ? 'Signing in...' : 'Sign in'}
@@ -159,9 +218,9 @@ function SignInForm({ dark }: { dark?: boolean }) {
           placeholder="you@sdcsheq.co.za" autoComplete="email" style={inputStyle} />
       </div>
       {error && <div style={{ backgroundColor: '#FEE2E2', borderRadius: '8px', padding: '10px 12px', marginBottom: '14px', fontSize: '13px', color: '#C0392B' }}>{error}</div>}
-      <button onClick={handleForgot} disabled={loading || !email}
-        style={{ width: '100%', padding: '13px', backgroundColor: loading || !email ? (dark ? '#5A4A2A' : '#C8B89A') : AMBER, color: '#fff', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: '700', cursor: 'pointer' }}>
-        {loading ? 'Sending...' : 'Send reset link'}
+      <button onClick={handleForgot} disabled={loading || !email || cooldown > 0}
+        style={{ width: '100%', padding: '13px', backgroundColor: loading || !email || cooldown > 0 ? (dark ? '#5A4A2A' : '#C8B89A') : AMBER, color: '#fff', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: '700', cursor: cooldown > 0 ? 'not-allowed' : 'pointer' }}>
+        {loading ? 'Sending...' : cooldown > 0 ? `Resend in ${cooldown}s` : 'Send reset link'}
       </button>
     </>
   )

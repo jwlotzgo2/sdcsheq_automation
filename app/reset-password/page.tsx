@@ -35,14 +35,16 @@ export default function ResetPasswordPage() {
         return
       }
 
-      // Check for hash fragment (#access_token=...&type=recovery)
+      // Check for hash fragment (#access_token=...&type=recovery|invite|signup|magiclink)
+      // All of these legitimately land here to let the user set/reset a password.
       const hash = window.location.hash
       if (hash && hash.includes('access_token')) {
         const params = new URLSearchParams(hash.substring(1))
         const accessToken  = params.get('access_token')
         const refreshToken = params.get('refresh_token')
         const type         = params.get('type')
-        if (accessToken && refreshToken && type === 'recovery') {
+        const acceptable   = new Set(['recovery', 'invite', 'signup', 'magiclink'])
+        if (accessToken && refreshToken && (!type || acceptable.has(type))) {
           const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
           if (error) {
             setExpired(true)
@@ -93,7 +95,7 @@ export default function ResetPasswordPage() {
     if (!resendEmail) { setError('Please enter your email address.'); return }
     setLoading(true); setError('')
     const { error } = await supabase.auth.resetPasswordForEmail(resendEmail, {
-      redirectTo: `${window.location.origin}/api/auth/callback?next=/reset-password`,
+      redirectTo: `${window.location.origin}/auth/confirm?next=/reset-password`,
     })
     if (error) { setError(error.message); setLoading(false) }
     else { setResendSent(true); setLoading(false) }

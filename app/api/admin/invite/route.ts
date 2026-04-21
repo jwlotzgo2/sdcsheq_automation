@@ -36,9 +36,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, message: 'User role updated' })
   }
 
+  // Send the invitee via /auth/confirm so the token-hash flow protects them
+  // from email-scanner prefetch. Once confirmed, they land on /reset-password
+  // to set their initial password.
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
   const { error } = await supabase.auth.admin.inviteUserByEmail(email, {
     data: { invited_role: role },
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'}/reset-password`,
+    redirectTo: `${siteUrl}/auth/confirm?next=/reset-password`,
   })
   if (error) {
     console.error('[invite]', error.message)
