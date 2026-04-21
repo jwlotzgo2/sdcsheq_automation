@@ -2,15 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/auth/require-role'
 
 /**
- * Admin-only rescue endpoint. Re-triggers extraction for an invoice that was
- * left at status=INGESTED because the original fire-and-forget fetch from the
- * Postmark webhook was truncated by the Vercel runtime (see commit message
- * for the 2026-04-21 incident). Delegates to the existing /api/extract route
- * using the same INTERNAL_API_KEY path so all the retry / status update /
- * audit trail behaviour is shared in one place.
+ * Re-trigger extraction for an invoice that was left at status=INGESTED
+ * because the original fire-and-forget fetch from the Postmark webhook was
+ * truncated by the Vercel runtime (see the 2026-04-21 incident). Gated at
+ * AP_CLERK — same level as /api/extract — because this is a normal recovery
+ * action anyone who processes invoices may need, not an admin escalation.
+ *
+ * Delegates to /api/extract using INTERNAL_API_KEY so the extractor's
+ * retry / status / audit-trail behaviour lives in one place.
  */
 export async function POST(request: NextRequest) {
-  const gate = await requireRole(request, 'AP_ADMIN')
+  const gate = await requireRole(request, 'AP_CLERK')
   if (!gate.ok) return gate.response
 
   let body: { invoice_id?: string }
@@ -38,7 +40,7 @@ export async function POST(request: NextRequest) {
   let payload: unknown
   try { payload = JSON.parse(text) } catch { payload = { raw: text } }
 
-  console.log(`[admin/reextract] ${gate.user.email} -> ${invoiceId} (${res.status})`)
+  console.log(`[invoices/reextract] ${gate.user.email} -> ${invoiceId} (${res.status})`)
 
   if (!res.ok) {
     return NextResponse.json({ error: 'Extraction failed', detail: payload }, { status: res.status })

@@ -14,6 +14,17 @@ const MUTED  = '#8A8878'
 const WHITE  = '#FFFFFF'
 const RED    = '#EF4444'
 
+// Invoices sitting at status=INGESTED this long are considered stuck:
+// the extractor never ran (or crashed) and the user should get a 1-click
+// rescue button. Tuned short because healthy extraction completes in ~5s.
+const STALE_MINUTES = 2
+
+const ageMinutes = (d: string) =>
+  Math.floor((Date.now() - new Date(d).getTime()) / 60000)
+
+const isStuck = (inv: { status: string; created_at: string }) =>
+  inv.status === 'INGESTED' && ageMinutes(inv.created_at) >= STALE_MINUTES
+
 const STATUS_STYLES: Record<string, { color: string; bg: string; label: string }> = {
   INGESTED:          { color: '#64748B', bg: '#F1F5F9', label: 'Ingested' },
   EXTRACTING:        { color: '#8B5CF6', bg: '#F5F3FF', label: 'Extracting' },
@@ -114,6 +125,9 @@ export default function InvoicesPage() {
   const [deleteTarget, setDeleteTarget]       = useState<any>(null)
   const [deleteReason, setDeleteReason]       = useState('')
   const [deleting, setDeleting]               = useState(false)
+  const [stuckCount, setStuckCount]           = useState(0)
+  // invoice id -> 'running' | 'ok' | error message. Drives per-row re-extract UI.
+  const [rescueState, setRescueState]         = useState<Record<string, 'running' | 'ok' | string>>({})
   const isMobile = useIsMobile()
 
   const supabase = createBrowserClient(
@@ -122,6 +136,25 @@ export default function InvoicesPage() {
   )
 
   useEffect(() => { fetchInvoices() }, [filter, dateFilter])
+
+  // Poll stuck count every 30s so the header badge stays fresh even when the
+  // user leaves the tab open. The query is a narrow COUNT so it's cheap.
+  useEffect(() => {
+    refreshStuckCount()
+    const id = setInterval(refreshStuckCount, 30000)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const refreshStuckCount = async () => {
+    const cutoff = new Date(Date.now() - STALE_MINUTES * 60000).toISOString()
+    const { count } = await supabase
+      .from('invoices')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'INGESTED')
+      .lte('created_at', cutoff)
+    setStuckCount(count ?? 0)
+  }
 
   const fetchInvoices = async () => {
     setLoading(true)
@@ -132,6 +165,10 @@ export default function InvoicesPage() {
       .order('created_at', { ascending: false })
       .limit(500)
     if (filter === 'DELETED') query = query.eq('status', 'DELETED')
+    else if (filter === 'STUCK') {
+      const cutoff = new Date(Date.now() - STALE_MINUTES * 60000).toISOString()
+      query = query.eq('status', 'INGESTED').lte('created_at', cutoff)
+    }
     else if (filter !== 'ALL') query = query.eq('status', filter)
     else query = query.neq('status', 'DELETED')
     if (from) query = query.gte('created_at', from)
@@ -139,6 +176,28 @@ export default function InvoicesPage() {
     const { data } = await query
     setInvoices(data ?? [])
     setLoading(false)
+    refreshStuckCount()
+  }
+
+  const handleReextract = async (invoiceId: string) => {
+    setRescueState((s) => ({ ...s, [invoiceId]: 'running' }))
+    try {
+      const res = await fetch('/api/invoices/reextract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoice_id: invoiceId }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setRescueState((s) => ({ ...s, [invoiceId]: json.error ?? `HTTP ${res.status}` }))
+        return
+      }
+      setRescueState((s) => ({ ...s, [invoiceId]: 'ok' }))
+      // Give the extractor a moment to flip the status, then refresh the list.
+      setTimeout(() => fetchInvoices(), 1200)
+    } catch (err: any) {
+      setRescueState((s) => ({ ...s, [invoiceId]: err?.message ?? 'failed' }))
+    }
   }
 
   const openPushModal = async () => {
@@ -197,6 +256,7 @@ export default function InvoicesPage() {
 
   const FILTERS = [
     { value: 'ALL',              label: 'All' },
+    { value: 'STUCK',            label: stuckCount > 0 ? `Stuck · ${stuckCount}` : 'Stuck' },
     { value: 'PENDING_REVIEW',   label: 'Pending Review' },
     { value: 'PENDING_APPROVAL', label: 'Pending Approval' },
     { value: 'APPROVED',         label: 'Approved' },
@@ -222,10 +282,28 @@ export default function InvoicesPage() {
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div>
-            <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: DARK, margin: '0 0 4px' }}>Invoices</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+              <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: DARK, margin: 0 }}>Invoices</h1>
+              {stuckCount > 0 && (
+                <button
+                  onClick={() => setFilter('STUCK')}
+                  title={`${stuckCount} invoice${stuckCount === 1 ? '' : 's'} stuck in extraction — click to view`}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '6px',
+                    padding: '3px 10px', borderRadius: '999px',
+                    backgroundColor: '#FEE2E2', color: RED,
+                    border: `1px solid ${RED}22`,
+                    fontSize: '11px', fontWeight: 700, cursor: 'pointer',
+                  }}
+                >
+                  <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', backgroundColor: RED }} />
+                  {stuckCount} stuck
+                </button>
+              )}
+            </div>
             <p style={{ fontSize: '12px', color: MUTED, margin: 0 }}>
               {invoices.length} invoice{invoices.length !== 1 ? 's' : ''}
-              {filter !== 'ALL' ? ` · ${STATUS_STYLES[filter]?.label}` : ''}
+              {filter !== 'ALL' ? ` · ${filter === 'STUCK' ? 'Stuck in extraction' : STATUS_STYLES[filter]?.label}` : ''}
               {' · '}{fmt(totalValue)}
             </p>
           </div>
@@ -301,22 +379,27 @@ export default function InvoicesPage() {
               const invoiceAge    = inv.invoice_date ? ageDays(inv.invoice_date) : null
               const supplierName = inv.supplier_name ?? 'Unknown'
               const color       = avatarColor(supplierName)
+              const stuck        = isStuck(inv)
+              const rescue       = rescueState[inv.id]
 
               return (
                 <div key={inv.id} style={{ display: 'flex', alignItems: 'stretch' }}>
                   <Link href={`/invoices/${inv.id}`} style={{ textDecoration: 'none', flex: 1 }}>
                     {isMobile ? (
                       /* MOBILE ROW */
-                      <div style={{ padding: '12px 14px', borderBottom: i < invoices.length - 1 ? `1px solid #F1F5F9` : 'none', borderLeft: isHighValue ? `3px solid ${AMBER}` : isOverdue ? `3px solid ${RED}` : '3px solid transparent', cursor: 'pointer', backgroundColor: WHITE, display: 'flex', alignItems: 'center', gap: '10px' }}
-                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = LIGHT)}
-                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = WHITE)}>
+                      <div style={{ padding: '12px 14px', borderBottom: i < invoices.length - 1 ? `1px solid #F1F5F9` : 'none', borderLeft: stuck ? `3px solid ${RED}` : isHighValue ? `3px solid ${AMBER}` : isOverdue ? `3px solid ${RED}` : '3px solid transparent', cursor: 'pointer', backgroundColor: stuck ? '#FEF7F7' : WHITE, display: 'flex', alignItems: 'center', gap: '10px' }}
+                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = stuck ? '#FDECEC' : LIGHT)}
+                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = stuck ? '#FEF7F7' : WHITE)}>
                         <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: WHITE, fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>{initials(supplierName)}</div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '2px', flexWrap: 'wrap' }}>
                             <span style={{ fontSize: '13px', fontWeight: '600', color: DARK }}>{supplierName}</span>
+                            {stuck       && <span style={{ fontSize: '9px', fontWeight: '700', color: RED,   backgroundColor: '#FEE2E2', padding: '1px 5px', borderRadius: '3px' }}>⚠ STUCK</span>}
                             {isHighValue && <span style={{ fontSize: '9px', fontWeight: '700', color: AMBER, backgroundColor: '#FEF3C7', padding: '1px 5px', borderRadius: '3px' }}>HIGH VALUE</span>}
                           </div>
-                          <div style={{ fontSize: '11px', color: MUTED }}>{inv.invoice_number ?? '—'}</div>
+                          <div style={{ fontSize: '11px', color: MUTED }}>
+                            {stuck ? `Waiting for extraction · ${ageMinutes(inv.created_at)}m` : (inv.invoice_number ?? '—')}
+                          </div>
                         </div>
                         <div style={{ flexShrink: 0, textAlign: 'right' }}>
                           <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', backgroundColor: statusStyle.bg, color: statusStyle.color, fontSize: '10px', fontWeight: '600', marginBottom: '3px', whiteSpace: 'nowrap' }}>{statusStyle.label}</span>
@@ -325,17 +408,20 @@ export default function InvoicesPage() {
                       </div>
                     ) : (
                       /* DESKTOP ROW */
-                      <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 150px 100px 100px 160px', padding: '12px 20px', borderBottom: i < invoices.length - 1 ? `1px solid #F1F5F9` : 'none', borderLeft: isHighValue ? `3px solid ${AMBER}` : isOverdue ? `3px solid ${RED}` : '3px solid transparent', cursor: 'pointer', backgroundColor: WHITE, alignItems: 'center' }}
-                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = LIGHT)}
-                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = WHITE)}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 150px 100px 100px 160px', padding: '12px 20px', borderBottom: i < invoices.length - 1 ? `1px solid #F1F5F9` : 'none', borderLeft: stuck ? `3px solid ${RED}` : isHighValue ? `3px solid ${AMBER}` : isOverdue ? `3px solid ${RED}` : '3px solid transparent', cursor: 'pointer', backgroundColor: stuck ? '#FEF7F7' : WHITE, alignItems: 'center' }}
+                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = stuck ? '#FDECEC' : LIGHT)}
+                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = stuck ? '#FEF7F7' : WHITE)}>
                         <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: WHITE, fontSize: '10px', fontWeight: '700', flexShrink: 0 }}>{initials(supplierName)}</div>
                         <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                             <span style={{ fontSize: '13px', fontWeight: '600', color: DARK }}>{supplierName}</span>
+                            {stuck      && <span title="Extraction never completed — click Re-extract" style={{ fontSize: '9px', fontWeight: '700', color: RED,   backgroundColor: '#FEE2E2', padding: '1px 6px', borderRadius: '4px', letterSpacing: '0.03em' }}>⚠ STUCK</span>}
                             {isHighValue && <span style={{ fontSize: '9px', fontWeight: '700', color: AMBER, backgroundColor: '#FEF3C7', padding: '1px 6px', borderRadius: '4px' }}>HIGH VALUE</span>}
                             {isOverdue  && <span style={{ fontSize: '9px', fontWeight: '700', color: RED,   backgroundColor: '#FEE2E2', padding: '1px 6px', borderRadius: '4px' }}>OVERDUE</span>}
                           </div>
-                          <div style={{ fontSize: '11px', color: MUTED, marginTop: '2px' }}>{inv.invoice_number ?? 'No invoice number'}</div>
+                          <div style={{ fontSize: '11px', color: MUTED, marginTop: '2px' }}>
+                            {stuck ? `Waiting for extraction · ${ageMinutes(inv.created_at)}m` : (inv.invoice_number ?? 'No invoice number')}
+                          </div>
                         </div>
                         <div><span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: '12px', backgroundColor: statusStyle.bg, color: statusStyle.color, fontSize: '11px', fontWeight: '600' }}>{statusStyle.label}</span></div>
                         <div style={{ fontSize: '12px', color: DARK }}>{fmtDate(inv.invoice_date)}</div>
@@ -351,8 +437,34 @@ export default function InvoicesPage() {
                       </div>
                     )}
                   </Link>
+                  {/* Row actions */}
+                  {stuck && (
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleReextract(inv.id) }}
+                      disabled={rescue === 'running'}
+                      title={
+                        rescue === 'ok'      ? 'Queued — refreshing…'
+                      : rescue === 'running' ? 'Re-extracting…'
+                      : rescue               ? `Failed: ${rescue}`
+                      :                        'Extraction never finished — click to retry'
+                      }
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
+                        padding: isMobile ? '6px 8px' : '6px 10px',
+                        marginRight: isMobile ? '8px' : 0,
+                        borderRadius: '6px', border: 'none',
+                        backgroundColor: rescue === 'running' ? '#F3F0EB' : rescue === 'ok' ? OLIVE : RED,
+                        color: rescue === 'running' ? MUTED : WHITE,
+                        fontSize: '11px', fontWeight: 700, cursor: rescue === 'running' ? 'not-allowed' : 'pointer',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {rescue === 'ok' ? '✓' : rescue === 'running' ? '…' : '↻'}
+                      {!isMobile && <span>{rescue === 'ok' ? 'Queued' : rescue === 'running' ? 'Retrying' : 'Re-extract'}</span>}
+                    </button>
+                  )}
                   {/* Delete button */}
-                  {!isMobile && !['XERO_POSTED', 'XERO_AUTHORISED', 'XERO_PAID'].includes(inv.status) && (
+                  {!stuck && !isMobile && !['XERO_POSTED', 'XERO_AUTHORISED', 'XERO_PAID'].includes(inv.status) && (
                     <button
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleteTarget(inv); setDeleteReason('') }}
                       style={{ width: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: MUTED, fontSize: '14px', flexShrink: 0, borderBottom: i < invoices.length - 1 ? `1px solid #F1F5F9` : 'none' }}
@@ -363,7 +475,7 @@ export default function InvoicesPage() {
                       🗑
                     </button>
                   )}
-                  {!isMobile && ['XERO_POSTED', 'XERO_AUTHORISED', 'XERO_PAID'].includes(inv.status) && (
+                  {!stuck && !isMobile && ['XERO_POSTED', 'XERO_AUTHORISED', 'XERO_PAID'].includes(inv.status) && (
                     <div style={{ width: '36px', flexShrink: 0, borderBottom: i < invoices.length - 1 ? `1px solid #F1F5F9` : 'none' }} />
                   )}
                 </div>
