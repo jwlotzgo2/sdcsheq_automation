@@ -70,10 +70,20 @@ export async function GET(request: NextRequest) {
     }
 
     console.error('[auth/confirm] verifyOtp failed:', error.message)
+
+    const target = new URL(`${origin}/login`)
+    target.searchParams.set('error', 'link_expired')
+    if (next) target.searchParams.set('next', next)
+    return NextResponse.redirect(target)
   }
 
-  const target = new URL(`${origin}/login`)
-  target.searchParams.set('error', 'link_expired')
-  if (next) target.searchParams.set('next', next)
-  return NextResponse.redirect(target)
+  // Implicit-flow fallback: Supabase's default `{{ .ConfirmationURL }}`
+  // email template routes through /auth/v1/verify which 303-redirects here
+  // with the tokens in a URL *hash fragment* (#access_token=…&type=…).
+  // The browser never sends the hash to the server, so we can't see it here —
+  // but it survives HTTP redirects. Bounce to `next` and let the client-side
+  // page (e.g. /reset-password) pick up the hash via supabase-js.
+  // This keeps the flow working regardless of whether the dashboard email
+  // template has been switched to `{{ .TokenHash }}` yet.
+  return NextResponse.redirect(`${origin}${next}`)
 }
