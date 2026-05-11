@@ -41,6 +41,13 @@ CRITICAL — SUPPLIER vs CUSTOMER DISTINCTION:
 - The billing address (showing SDC's address) is where the invoice is SENT TO — this is the customer, not the supplier.
 - Look for the issuing company's name near the logo, at the top of the invoice, or in the "From" or "Supplier" field.
 
+CRITICAL — VAT-EXCLUSIVE LINE VALUES:
+- "unit_price" and "line_total" MUST be VAT-EXCLUSIVE (net of VAT). Xero adds VAT on top of these values, so passing VAT-inclusive figures will double-charge VAT.
+- If the invoice shows both "Incl." and "Excl." columns for line items, ALWAYS use the Excl. value.
+- If the invoice only shows an Incl. value per line, divide by (1 + vat_rate/100) — default vat_rate is 15 for South African invoices.
+- Sanity check: the sum of all line_total values should equal amount_excl (the invoice subtotal before VAT), not amount_incl.
+- "amount_excl", "amount_vat", "amount_incl" remain as printed on the invoice footer/summary.
+
 Return ONLY a valid JSON object with this exact structure — no markdown, no explanation:
 
 {
@@ -223,7 +230,36 @@ export async function extractInvoice(invoiceId: string): Promise<void> {
 
   await supabase.from('invoices').update(invoiceUpdate).eq('id', invoiceId)
 
-  // 8. Write line items
+  // 8. Reconcile line items against amount_excl — if Claude grabbed VAT-incl values,
+  //    Σ line_total will equal amount_incl rather than amount_excl. Rescale in that case.
+  const reconciliationNotes: string[] = []
+  if (rawJson.line_items && rawJson.line_items.length > 0 && rawJson.amount_excl) {
+    const lineSum = rawJson.line_items.reduce(
+      (s: number, l: any) => s + Number(l.line_total ?? 0), 0
+    )
+    const amountExcl = Number(rawJson.amount_excl)
+    const amountIncl = Number(rawJson.amount_incl ?? 0)
+    const within = (a: number, b: number) => Math.abs(a - b) <= Math.max(1, Math.abs(b) * 0.02) // ±2% or R1
+
+    if (!within(lineSum, amountExcl) && amountIncl > 0 && within(lineSum, amountIncl)) {
+      // Lines are VAT-inclusive — rescale to excl using amount_excl/amount_incl ratio
+      const ratio = amountExcl / amountIncl
+      reconciliationNotes.push(
+        `Line totals were VAT-inclusive (Σ=${lineSum.toFixed(2)} matched amount_incl=${amountIncl.toFixed(2)}). Rescaled by ${ratio.toFixed(4)} to match amount_excl=${amountExcl.toFixed(2)}.`
+      )
+      rawJson.line_items = rawJson.line_items.map((l: any) => ({
+        ...l,
+        unit_price: l.unit_price != null ? Number(l.unit_price) * ratio : null,
+        line_total: l.line_total != null ? Number(l.line_total) * ratio : null,
+      }))
+    } else if (!within(lineSum, amountExcl)) {
+      reconciliationNotes.push(
+        `Line totals do not reconcile: Σ line_total=${lineSum.toFixed(2)}, amount_excl=${amountExcl.toFixed(2)}, amount_incl=${amountIncl.toFixed(2)}. Lines kept as extracted.`
+      )
+    }
+  }
+
+  // 9. Write line items
   if (rawJson.line_items && rawJson.line_items.length > 0) {
     const lineItems = await Promise.all(
       rawJson.line_items.map(async (item: any, index: number) => {
@@ -249,16 +285,23 @@ export async function extractInvoice(invoiceId: string): Promise<void> {
     await supabase.from('invoice_line_items').insert(lineItems)
   }
 
-  // 9. Audit trail
+  // 10. Audit trail
+  const reconciliationSuffix = reconciliationNotes.length > 0 ? ` — ${reconciliationNotes.join(' ')}` : ''
   await supabase.from('audit_trail').insert({
     invoice_id: invoiceId,
     from_status: 'EXTRACTING',
     to_status: 'PENDING_REVIEW',
     actor_email: 'system',
-    notes: `Extraction complete — confidence: ${rawJson.overall_confidence} — ${rawJson.line_items?.length ?? 0} line items`,
+    notes: `Extraction complete — confidence: ${rawJson.overall_confidence} — ${rawJson.line_items?.length ?? 0} line items${reconciliationSuffix}`,
+    metadata: {
+      model: 'claude-sonnet-4-5',
+      duration_ms: duration,
+      line_count: rawJson.line_items?.length ?? 0,
+      reconciliation: reconciliationNotes,
+    },
   })
 
-  // 10. Trigger Xero match check (non-blocking)
+  // 11. Trigger Xero match check (non-blocking)
   try {
     const { checkAndStoreXeroMatches } = await import('@/lib/xero/findMatchingInvoice')
     checkAndStoreXeroMatches(invoiceId).catch(err =>

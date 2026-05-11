@@ -30,12 +30,60 @@ function useIsMobile() {
   return v
 }
 
+const fmtFieldValue = (v: any) => {
+  if (v == null || v === '') return '∅'
+  if (typeof v === 'number') return v.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return String(v)
+}
+
+function AuditChanges({ metadata }: { metadata: any }) {
+  if (!metadata || typeof metadata !== 'object') return null
+  const rows: { label: string; from: string; to: string }[] = []
+  if (metadata.invoice_changes && typeof metadata.invoice_changes === 'object') {
+    for (const [k, diff] of Object.entries<any>(metadata.invoice_changes)) {
+      if (k === 'status') continue
+      if (diff && typeof diff === 'object' && 'from' in diff && 'to' in diff) {
+        rows.push({ label: k, from: fmtFieldValue(diff.from), to: fmtFieldValue(diff.to) })
+      }
+    }
+  }
+  const lineChanges = Array.isArray(metadata.line_changes) ? metadata.line_changes : []
+  if (rows.length === 0 && lineChanges.length === 0) return null
+  return (
+    <div style={{ marginTop: '3px', fontSize: '10px', color: DARK }}>
+      {rows.map(r => (
+        <div key={r.label}>
+          <span style={{ color: MUTED }}>{r.label}:</span> <s style={{ color: MUTED }}>{r.from}</s> → <strong>{r.to}</strong>
+        </div>
+      ))}
+      {lineChanges.map((lc: any, idx: number) => (
+        <div key={idx} style={{ marginTop: '1px' }}>
+          <span style={{ color: MUTED }}>Line</span> <em>{lc.description ?? lc.line_id}</em>:
+          {' '}
+          {Object.entries<any>(lc.changes ?? {}).map(([k, d]: any, j: number) => (
+            <span key={k}>
+              {j > 0 && ', '}
+              <span style={{ color: MUTED }}>{k}</span>{' '}
+              <s style={{ color: MUTED }}>{fmtFieldValue(d.from)}</s> → <strong>{fmtFieldValue(d.to)}</strong>
+            </span>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 const ApproveDetail = memo(function ApproveDetail({ selected, lines, glCodes, notes, auditTrail, showAudit, reviewerNote, invoiceNote, setNotes, setShowAudit, updateLine }: {
   selected: any; lines: any[]; glCodes: any[]; notes: string; auditTrail: any[]
   showAudit: boolean; reviewerNote: any; invoiceNote: string | null
   setNotes: (v: string) => void; setShowAudit: (v: boolean) => void
   updateLine: (i: number, field: string, value: any) => void
 }) {
+  const cellInput: React.CSSProperties = {
+    width: '100%', padding: '3px 5px', fontSize: '10px',
+    border: `1px solid ${BORDER}`, borderRadius: '4px', backgroundColor: WHITE,
+    color: DARK, boxSizing: 'border-box', fontFamily: 'inherit',
+  }
   return (
     <>
       {/* Single-line header */}
@@ -76,16 +124,16 @@ const ApproveDetail = memo(function ApproveDetail({ selected, lines, glCodes, no
       {/* Line items */}
       <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, overflow: 'hidden', flexShrink: 0 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 36px 76px 76px 170px', padding: '5px 10px', backgroundColor: LIGHT, borderBottom: `1px solid ${BORDER}` }}>
-          {['Description', 'Qty', 'Unit', 'Total', 'GL Code'].map(h => (
+          {['Description', 'Qty', 'Unit (excl)', 'Total (excl)', 'GL Code'].map(h => (
             <div key={h} style={{ fontSize: '9px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
           ))}
         </div>
         {lines.map((line, i) => (
-          <div key={line.id} style={{ display: 'grid', gridTemplateColumns: '2fr 36px 76px 76px 170px', padding: '5px 10px', borderBottom: i < lines.length - 1 ? `1px solid ${LIGHT}` : 'none', alignItems: 'center' }}>
-            <div style={{ fontSize: '10px', color: DARK, paddingRight: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={line.description}>{line.description}</div>
-            <div style={{ fontSize: '10px', color: DARK }}>{line.quantity}</div>
-            <div style={{ fontSize: '10px', color: DARK }}>{fmt(line.unit_price)}</div>
-            <div style={{ fontSize: '10px', fontWeight: '500', color: DARK }}>{fmt(line.line_total)}</div>
+          <div key={line.id} style={{ display: 'grid', gridTemplateColumns: '2fr 36px 76px 76px 170px', gap: '4px', padding: '5px 10px', borderBottom: i < lines.length - 1 ? `1px solid ${LIGHT}` : 'none', alignItems: 'center' }}>
+            <input type="text"   value={line.description ?? ''} onChange={e => updateLine(i, 'description', e.target.value)} style={cellInput} />
+            <input type="number" step="any"  value={line.quantity ?? ''}   onChange={e => updateLine(i, 'quantity', e.target.value)}   style={cellInput} />
+            <input type="number" step="0.01" value={line.unit_price ?? ''} onChange={e => updateLine(i, 'unit_price', e.target.value)} style={cellInput} />
+            <input type="number" step="0.01" value={line.line_total ?? ''} onChange={e => updateLine(i, 'line_total', e.target.value)} style={cellInput} />
             <select value={line.gl_code_id ?? line.gl_codes?.id ?? ''} onChange={e => updateLine(i, 'gl_code_id', e.target.value)}
               style={{ padding: '3px 5px', fontSize: '10px', border: `1px solid ${BORDER}`, borderRadius: '4px', backgroundColor: WHITE, color: DARK, width: '100%' }}>
               <option value="">— GL —</option>
@@ -119,10 +167,11 @@ const ApproveDetail = memo(function ApproveDetail({ selected, lines, glCodes, no
         {showAudit && auditTrail.map((entry: any) => (
           <div key={entry.id} style={{ padding: '6px 10px', borderTop: `1px solid ${LIGHT}`, display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
             <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: AMBER, flexShrink: 0, marginTop: '5px' }} />
-            <div>
+            <div style={{ minWidth: 0, flex: 1 }}>
               <span style={{ fontSize: '10px', fontWeight: '600', color: DARK }}>{entry.from_status ? `${entry.from_status} → ${entry.to_status}` : entry.to_status}</span>
-              <span style={{ fontSize: '9px', color: MUTED, marginLeft: '6px' }}>{entry.actor_email?.split('@')[0]} · {fmtDT(entry.created_at)}</span>
+              <span style={{ fontSize: '9px', color: MUTED, marginLeft: '6px' }}>{entry.actor_email ?? '—'} · {fmtDT(entry.created_at)}</span>
               {entry.notes && <div style={{ fontSize: '10px', color: DARK, fontStyle: 'italic', marginTop: '1px' }}>{entry.notes}</div>}
+              <AuditChanges metadata={entry.metadata} />
             </div>
           </div>
         ))}
@@ -135,6 +184,7 @@ export default function ApprovePage() {
   const [invoices, setInvoices]           = useState<any[]>([])
   const [selected, setSelected]           = useState<any>(null)
   const [lines, setLines]                 = useState<any[]>([])
+  const [originalLines, setOriginalLines] = useState<any[]>([])
   const [glCodes, setGlCodes]             = useState<any[]>([])
   const [pdfUrl, setPdfUrl]               = useState<string | null>(null)
   const [auditTrail, setAuditTrail]       = useState<any[]>([])
@@ -144,6 +194,7 @@ export default function ApprovePage() {
   const [mobileView, setMobileView]       = useState<'list' | 'detail'>('list')
   const [showPdf, setShowPdf]             = useState(false)
   const [showAudit, setShowAudit]         = useState(false)
+  const [errorMsg, setErrorMsg]           = useState<string | null>(null)
   const isMobile = useIsMobile()
 
   const supabase = createBrowserClient(
@@ -172,9 +223,9 @@ export default function ApprovePage() {
     const [{ data: inv }, { data: lineData }, { data: audit }] = await Promise.all([
       supabase.from('invoices').select('id, status, supplier_id, supplier_name, invoice_number, invoice_date, due_date, amount_excl, amount_vat, amount_incl, currency, notes, storage_path, rejection_reason, record_type, submitted_by, suppliers(name, vat_number)').eq('id', id).single(),
       supabase.from('invoice_line_items').select('*, gl_codes(id, xero_account_code, name)').eq('invoice_id', id).order('sort_order'),
-      supabase.from('audit_trail').select('id, from_status, to_status, actor_email, notes, created_at').eq('invoice_id', id).order('created_at'),
+      supabase.from('audit_trail').select('id, from_status, to_status, actor_email, notes, metadata, created_at').eq('invoice_id', id).order('created_at'),
     ])
-    setSelected(inv); setLines(lineData ?? []); setAuditTrail(audit ?? [])
+    setSelected(inv); setLines(lineData ?? []); setOriginalLines(JSON.parse(JSON.stringify(lineData ?? []))); setAuditTrail(audit ?? [])
 
     if (inv?.storage_path) {
       const path = inv.storage_path.replace('invoices/', '')
@@ -188,33 +239,64 @@ export default function ApprovePage() {
     setLines(prev => prev.map((l, i) => i === index ? { ...l, [field]: value } : l))
   }
 
+  const collectLineEdits = () => {
+    const origById = new Map(originalLines.map(l => [l.id, l]))
+    const edits: any[] = []
+    for (const line of lines) {
+      const orig = origById.get(line.id)
+      if (!orig) continue
+      const currentGl = line.gl_code_id ?? line.gl_codes?.id ?? null
+      const origGl = orig.gl_code_id ?? orig.gl_codes?.id ?? null
+      const fields: any = { id: line.id }
+      let changed = false
+      const cmpNum = (a: any, b: any) =>
+        (a == null && b == null) ||
+        (a != null && b != null && Number(a) === Number(b))
+      if ((line.description ?? '') !== (orig.description ?? '')) { fields.description = line.description; changed = true }
+      if (!cmpNum(line.quantity,   orig.quantity))   { fields.quantity   = line.quantity;   changed = true }
+      if (!cmpNum(line.unit_price, orig.unit_price)) { fields.unit_price = line.unit_price; changed = true }
+      if (!cmpNum(line.line_total, orig.line_total)) { fields.line_total = line.line_total; changed = true }
+      if (currentGl !== origGl) { fields.gl_code_id = currentGl || null; changed = true }
+      if (changed) edits.push(fields)
+    }
+    return edits
+  }
+
   const handleAction = async (actionType: 'approve' | 'return' | 'reject') => {
     if (!selected) return
-    if ((actionType === 'return' || actionType === 'reject') && !notes) {
-      alert(`Please add a ${actionType === 'return' ? 'return reason' : 'rejection reason'}.`); return
+    if ((actionType === 'return' || actionType === 'reject') && !notes.trim()) {
+      setErrorMsg(`Please add a ${actionType === 'return' ? 'return reason' : 'rejection reason'}.`); return
     }
+    setErrorMsg(null)
     setSubmitting(true)
-    const user = (await supabase.auth.getUser()).data.user
-    const statusMap = { approve: 'APPROVED', return: 'RETURNED', reject: 'REJECTED' }
-    const newStatus = statusMap[actionType]
 
-    for (const line of lines) {
-      await supabase.from('invoice_line_items').update({ gl_code_id: line.gl_code_id ?? line.gl_codes?.id }).eq('id', line.id)
+    const edits = collectLineEdits()
+    const body: any = { action: actionType, notes: notes.trim() || undefined }
+    if (edits.length > 0) body.lines = edits
+
+    try {
+      const res = await fetch(`/api/invoices/${selected.id}/transition`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setErrorMsg(data.error ?? 'Action failed')
+        setSubmitting(false)
+        return
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message ?? 'Network error')
+      setSubmitting(false)
+      return
     }
-    await supabase.from('invoices').update({
-      status: newStatus,
-      ...(actionType === 'reject' ? { rejection_reason: notes } : {}),
-    }).eq('id', selected.id)
-    await supabase.from('audit_trail').insert({
-      invoice_id: selected.id, from_status: 'PENDING_APPROVAL', to_status: newStatus,
-      actor_email: user?.email, notes: notes || (actionType === 'approve' ? 'Approved' : ''),
-    })
 
     const remaining = invoices.filter(i => i.id !== selected.id)
     setInvoices(remaining); setSubmitting(false); setNotes('')
     if (isMobile) setMobileView('list')
     if (remaining.length > 0) { if (!isMobile) selectInvoice(remaining[0].id) }
-    else { setSelected(null); setLines([]) }
+    else { setSelected(null); setLines([]); setOriginalLines([]) }
   }
 
   // Find reviewer note — the submission to PENDING_APPROVAL
@@ -285,10 +367,15 @@ export default function ApprovePage() {
                 )}
               </div>
             )}
-            <div style={{ position: 'fixed', bottom: '60px', left: 0, right: 0, padding: '10px 16px', backgroundColor: WHITE, borderTop: `1px solid ${BORDER}`, display: 'flex', gap: '8px', zIndex: 50 }}>
-              <button onClick={() => handleAction('reject')} disabled={submitting} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '2px solid #EF4444', backgroundColor: WHITE, color: '#EF4444', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>Reject</button>
-              <button onClick={() => handleAction('return')} disabled={submitting} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: `2px solid ${AMBER}`, backgroundColor: WHITE, color: AMBER, fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>Return</button>
-              <button onClick={() => handleAction('approve')} disabled={submitting} style={{ flex: 2, padding: '12px', borderRadius: '10px', border: 'none', backgroundColor: OLIVE, color: WHITE, fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>✓ Approve</button>
+            <div style={{ position: 'fixed', bottom: '60px', left: 0, right: 0, padding: '10px 16px', backgroundColor: WHITE, borderTop: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', gap: '8px', zIndex: 50 }}>
+              {errorMsg && (
+                <div style={{ padding: '8px 12px', backgroundColor: '#FEE2E2', color: '#EF4444', fontSize: '12px', borderRadius: '8px', border: `1px solid #FCA5A5` }}>{errorMsg}</div>
+              )}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => handleAction('reject')} disabled={submitting} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '2px solid #EF4444', backgroundColor: WHITE, color: '#EF4444', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>Reject</button>
+                <button onClick={() => handleAction('return')} disabled={submitting} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: `2px solid ${AMBER}`, backgroundColor: WHITE, color: AMBER, fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>Return</button>
+                <button onClick={() => handleAction('approve')} disabled={submitting} style={{ flex: 2, padding: '12px', borderRadius: '10px', border: 'none', backgroundColor: OLIVE, color: WHITE, fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>✓ Approve</button>
+              </div>
             </div>
           </div>
         )}
@@ -316,7 +403,10 @@ export default function ApprovePage() {
             <p style={{ fontSize: '12px', color: MUTED, margin: 0 }}>{invoices.length} invoice{invoices.length !== 1 ? 's' : ''} awaiting approval</p>
           </div>
           {selected && (
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {errorMsg && (
+                <span style={{ padding: '6px 10px', backgroundColor: '#FEE2E2', color: '#EF4444', fontSize: '12px', borderRadius: '6px', border: `1px solid #FCA5A5` }}>{errorMsg}</span>
+              )}
               <button onClick={() => handleAction('reject')} disabled={submitting} style={{ padding: '7px 14px', borderRadius: '7px', border: '1.5px solid #EF4444', backgroundColor: WHITE, color: '#EF4444', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Reject</button>
               <button onClick={() => handleAction('return')} disabled={submitting} style={{ padding: '7px 14px', borderRadius: '7px', border: `1.5px solid ${AMBER}`, backgroundColor: WHITE, color: AMBER, fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Return to Reviewer</button>
               <button onClick={() => handleAction('approve')} disabled={submitting} style={{ padding: '7px 20px', borderRadius: '7px', border: 'none', backgroundColor: OLIVE, color: WHITE, fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>{submitting ? 'Processing...' : '✓ Approve'}</button>

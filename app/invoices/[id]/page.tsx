@@ -49,36 +49,95 @@ function useIsMobile() {
   return v
 }
 
+const fmtFieldValue = (v: any) => {
+  if (v == null || v === '') return '∅'
+  if (typeof v === 'number') return v.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return String(v)
+}
+
+function AuditChanges({ metadata }: { metadata: any }) {
+  if (!metadata || typeof metadata !== 'object') return null
+  const rows: { label: string; from: string; to: string }[] = []
+
+  if (metadata.invoice_changes && typeof metadata.invoice_changes === 'object') {
+    for (const [k, diff] of Object.entries<any>(metadata.invoice_changes)) {
+      if (k === 'status') continue // already shown in header
+      if (diff && typeof diff === 'object' && 'from' in diff && 'to' in diff) {
+        rows.push({ label: k, from: fmtFieldValue(diff.from), to: fmtFieldValue(diff.to) })
+      }
+    }
+  }
+
+  const lineChanges = Array.isArray(metadata.line_changes) ? metadata.line_changes : []
+  if (rows.length === 0 && lineChanges.length === 0) return null
+
+  return (
+    <div style={{ marginTop: '4px', fontSize: '11px', color: DARK }}>
+      {rows.map(r => (
+        <div key={r.label}>
+          <span style={{ color: MUTED }}>{r.label}:</span> <s style={{ color: MUTED }}>{r.from}</s> → <strong>{r.to}</strong>
+        </div>
+      ))}
+      {lineChanges.map((lc: any, idx: number) => (
+        <div key={idx} style={{ marginTop: '2px' }}>
+          <span style={{ color: MUTED }}>Line</span> <em>{lc.description ?? lc.line_id}</em>:
+          {' '}
+          {Object.entries<any>(lc.changes ?? {}).map(([k, d]: any, j: number) => (
+            <span key={k}>
+              {j > 0 && ', '}
+              <span style={{ color: MUTED }}>{k}</span>{' '}
+              <s style={{ color: MUTED }}>{fmtFieldValue(d.from)}</s> → <strong>{fmtFieldValue(d.to)}</strong>
+            </span>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // External memo — line items table, no focus issues
 const LineItemsTable = memo(function LineItemsTable({ lines, glCodes, canReview, onUpdateLine }: {
   lines: any[]; glCodes: any[]; canReview: boolean
   onUpdateLine: (i: number, field: string, value: any) => void
 }) {
+  const cellInput: React.CSSProperties = {
+    width: '100%', padding: '4px 6px', fontSize: '12px',
+    border: `1px solid ${BORDER}`, borderRadius: '4px', backgroundColor: WHITE,
+    color: DARK, boxSizing: 'border-box', fontFamily: 'inherit',
+  }
   return (
     <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, overflow: 'hidden' }}>
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 50px 90px 90px 180px', padding: '8px 12px', backgroundColor: LIGHT, borderBottom: `1px solid ${BORDER}` }}>
-        {['Description', 'Qty', 'Unit', 'Total', 'GL Code'].map(h => (
+        {['Description', 'Qty', 'Unit (excl)', 'Total (excl)', 'GL Code'].map(h => (
           <div key={h} style={{ fontSize: '10px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
         ))}
       </div>
       {lines.length === 0 ? (
         <div style={{ padding: '24px', textAlign: 'center', color: MUTED, fontSize: '13px' }}>No line items extracted.</div>
       ) : lines.map((line, i) => (
-        <div key={line.id} style={{ display: 'grid', gridTemplateColumns: '2fr 50px 90px 90px 180px', padding: '8px 12px', borderBottom: i < lines.length - 1 ? `1px solid ${LIGHT}` : 'none', alignItems: 'center' }}>
-          <div style={{ fontSize: '12px', color: DARK, paddingRight: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={line.description}>{line.description}</div>
-          <div style={{ fontSize: '12px', color: DARK }}>{line.quantity}</div>
-          <div style={{ fontSize: '12px', color: DARK }}>{fmt(line.unit_price)}</div>
-          <div style={{ fontSize: '12px', fontWeight: '500', color: DARK }}>{fmt(line.line_total)}</div>
+        <div key={line.id} style={{ display: 'grid', gridTemplateColumns: '2fr 50px 90px 90px 180px', gap: '6px', padding: '8px 12px', borderBottom: i < lines.length - 1 ? `1px solid ${LIGHT}` : 'none', alignItems: 'center' }}>
           {canReview ? (
-            <select value={line.gl_code_id ?? line.gl_codes?.id ?? ''} onChange={e => onUpdateLine(i, 'gl_code_id', e.target.value)}
-              style={{ padding: '4px 6px', fontSize: '11px', border: `1px solid ${BORDER}`, borderRadius: '5px', backgroundColor: WHITE, color: DARK, width: '100%' }}>
-              <option value="">— GL —</option>
-              {glCodes.map(g => <option key={g.id} value={g.id}>{g.xero_account_code} · {g.name}</option>)}
-            </select>
+            <>
+              <input type="text" value={line.description ?? ''} onChange={e => onUpdateLine(i, 'description', e.target.value)} style={cellInput} />
+              <input type="number" step="any" value={line.quantity ?? ''} onChange={e => onUpdateLine(i, 'quantity', e.target.value)} style={cellInput} />
+              <input type="number" step="0.01" value={line.unit_price ?? ''} onChange={e => onUpdateLine(i, 'unit_price', e.target.value)} style={cellInput} />
+              <input type="number" step="0.01" value={line.line_total ?? ''} onChange={e => onUpdateLine(i, 'line_total', e.target.value)} style={cellInput} />
+              <select value={line.gl_code_id ?? line.gl_codes?.id ?? ''} onChange={e => onUpdateLine(i, 'gl_code_id', e.target.value)}
+                style={{ padding: '4px 6px', fontSize: '11px', border: `1px solid ${BORDER}`, borderRadius: '5px', backgroundColor: WHITE, color: DARK, width: '100%' }}>
+                <option value="">— GL —</option>
+                {glCodes.map(g => <option key={g.id} value={g.id}>{g.xero_account_code} · {g.name}</option>)}
+              </select>
+            </>
           ) : (
-            <span style={{ fontSize: '11px', color: line.gl_codes ? OLIVE : MUTED }}>
-              {line.gl_codes ? `${line.gl_codes.xero_account_code} · ${line.gl_codes.name}` : '—'}
-            </span>
+            <>
+              <div style={{ fontSize: '12px', color: DARK, paddingRight: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={line.description}>{line.description}</div>
+              <div style={{ fontSize: '12px', color: DARK }}>{line.quantity}</div>
+              <div style={{ fontSize: '12px', color: DARK }}>{fmt(line.unit_price)}</div>
+              <div style={{ fontSize: '12px', fontWeight: '500', color: DARK }}>{fmt(line.line_total)}</div>
+              <span style={{ fontSize: '11px', color: line.gl_codes ? OLIVE : MUTED }}>
+                {line.gl_codes ? `${line.gl_codes.xero_account_code} · ${line.gl_codes.name}` : '—'}
+              </span>
+            </>
           )}
         </div>
       ))}
@@ -93,6 +152,7 @@ export default function InvoiceDetailPage() {
 
   const [invoice, setInvoice]           = useState<any>(null)
   const [lines, setLines]               = useState<any[]>([])
+  const [originalLines, setOriginalLines] = useState<any[]>([])
   const [glCodes, setGlCodes]           = useState<any[]>([])
   const [suppliers, setSuppliers]       = useState<any[]>([])
   const [pdfUrl, setPdfUrl]             = useState<string | null>(null)
@@ -103,6 +163,7 @@ export default function InvoiceDetailPage() {
   const [selectedSupplier, setSelectedSupplier] = useState('')
   const [showPdf, setShowPdf]           = useState(false)
   const [showAudit, setShowAudit]       = useState(false)
+  const [errorMsg, setErrorMsg]         = useState<string | null>(null)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -118,11 +179,12 @@ export default function InvoiceDetailPage() {
         supabase.from('invoices').select('id, status, supplier_id, supplier_name, invoice_number, invoice_date, due_date, amount_excl, amount_vat, amount_incl, currency, notes, storage_path, rejection_reason, record_type, submitted_by').eq('id', id).single(),
         supabase.from('invoice_line_items').select('*, gl_codes(id, xero_account_code, name)').eq('invoice_id', id).order('sort_order'),
         supabase.from('gl_codes').select('id, xero_account_code, name').eq('is_active', true).order('xero_account_code'),
-        supabase.from('audit_trail').select('id, from_status, to_status, actor_email, notes, created_at').eq('invoice_id', id).order('created_at'),
+        supabase.from('audit_trail').select('id, from_status, to_status, actor_email, notes, metadata, created_at').eq('invoice_id', id).order('created_at'),
         supabase.from('suppliers').select('id, name, vat_number').eq('is_active', true).order('name'),
       ])
       setInvoice(inv)
       setLines(lineData ?? [])
+      setOriginalLines(JSON.parse(JSON.stringify(lineData ?? [])))
       setGlCodes(glData ?? [])
       setAuditTrail(audit ?? [])
       setSuppliers(suppData ?? [])
@@ -143,29 +205,62 @@ export default function InvoiceDetailPage() {
     setLines(prev => prev.map((l, i) => i === index ? { ...l, [field]: value } : l))
   }
 
-  const handleSubmit = async () => {
-    setSubmitting(true)
-    await supabase.from('invoices').update({ status: 'PENDING_APPROVAL', supplier_id: selectedSupplier || null, notes: notes || invoice?.notes }).eq('id', id)
+  // Build only changed line edits to send to the server.
+  const collectLineEdits = () => {
+    const origById = new Map(originalLines.map(l => [l.id, l]))
+    const edits: any[] = []
     for (const line of lines) {
-      await supabase.from('invoice_line_items').update({ gl_code_id: line.gl_code_id ?? line.gl_codes?.id }).eq('id', line.id)
+      const orig = origById.get(line.id)
+      if (!orig) continue
+      const currentGl = line.gl_code_id ?? line.gl_codes?.id ?? null
+      const origGl = orig.gl_code_id ?? orig.gl_codes?.id ?? null
+      const fields: any = { id: line.id }
+      let changed = false
+      const cmpNum = (a: any, b: any) =>
+        (a == null && b == null) ||
+        (a != null && b != null && Number(a) === Number(b))
+      if ((line.description ?? '') !== (orig.description ?? '')) { fields.description = line.description; changed = true }
+      if (!cmpNum(line.quantity,   orig.quantity))   { fields.quantity   = line.quantity;   changed = true }
+      if (!cmpNum(line.unit_price, orig.unit_price)) { fields.unit_price = line.unit_price; changed = true }
+      if (!cmpNum(line.line_total, orig.line_total)) { fields.line_total = line.line_total; changed = true }
+      if (currentGl !== origGl) { fields.gl_code_id = currentGl || null; changed = true }
+      if (changed) edits.push(fields)
     }
-    await supabase.from('audit_trail').insert({
-      invoice_id: id, from_status: invoice?.status, to_status: 'PENDING_APPROVAL',
-      actor_email: (await supabase.auth.getUser()).data.user?.email,
-      notes: notes || 'Submitted for approval',
-    })
-    router.push('/invoices')
+    return edits
   }
 
-  const handleReject = async () => {
-    if (!notes) { alert('Please add a rejection reason.'); return }
+  const callTransition = async (action: 'submit' | 'reject') => {
+    setErrorMsg(null)
     setSubmitting(true)
-    await supabase.from('invoices').update({ status: 'REJECTED', rejection_reason: notes }).eq('id', id)
-    await supabase.from('audit_trail').insert({
-      invoice_id: id, from_status: invoice?.status, to_status: 'REJECTED',
-      actor_email: (await supabase.auth.getUser()).data.user?.email, notes,
-    })
-    router.push('/invoices')
+    try {
+      const body: any = { action, notes: notes || undefined }
+      if (action === 'submit') {
+        body.supplier_id = selectedSupplier || null
+        const edits = collectLineEdits()
+        if (edits.length > 0) body.lines = edits
+      }
+      const res = await fetch(`/api/invoices/${id}/transition`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setErrorMsg(data.error ?? 'Action failed')
+        setSubmitting(false)
+        return
+      }
+      router.push('/invoices')
+    } catch (err: any) {
+      setErrorMsg(err.message ?? 'Network error')
+      setSubmitting(false)
+    }
+  }
+
+  const handleSubmit = () => callTransition('submit')
+  const handleReject = () => {
+    if (!notes.trim()) { setErrorMsg('Please add a rejection reason.'); return }
+    callTransition('reject')
   }
 
   if (loading) return <AppShell><div style={{ padding: '60px', textAlign: 'center', color: MUTED }}>Loading...</div></AppShell>
@@ -260,30 +355,47 @@ export default function InvoiceDetailPage() {
           {lines.length > 0 && (
             <div style={{ backgroundColor: WHITE, borderRadius: '10px', border: `1px solid ${BORDER}`, overflow: 'hidden', marginBottom: '10px' }}>
               <div style={{ padding: '10px 14px', borderBottom: `1px solid ${BORDER}`, fontSize: '11px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Line Items ({lines.length})
+                Line Items ({lines.length}){canReview && <span style={{ marginLeft: '6px', textTransform: 'none', fontWeight: '500', color: MUTED }}> · values are excl. VAT</span>}
               </div>
-              {lines.map((line, i) => (
-                <div key={line.id} style={{ padding: '10px 14px', borderBottom: i < lines.length - 1 ? `1px solid ${LIGHT}` : 'none' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '13px', color: DARK, flex: 1, paddingRight: '8px' }}>{line.description}</span>
-                    <span style={{ fontSize: '13px', fontWeight: '600', color: DARK, flexShrink: 0 }}>{fmt(line.line_total)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '11px', color: MUTED }}>Qty: {line.quantity} × {fmt(line.unit_price)}</span>
+              {lines.map((line, i) => {
+                const cellInput: React.CSSProperties = {
+                  width: '100%', padding: '6px 8px', fontSize: '13px',
+                  border: `1px solid ${BORDER}`, borderRadius: '6px', backgroundColor: WHITE,
+                  color: DARK, boxSizing: 'border-box', fontFamily: 'inherit',
+                }
+                return (
+                  <div key={line.id} style={{ padding: '10px 14px', borderBottom: i < lines.length - 1 ? `1px solid ${LIGHT}` : 'none' }}>
                     {canReview ? (
-                      <select value={line.gl_code_id ?? line.gl_codes?.id ?? ''} onChange={e => updateLine(i, 'gl_code_id', e.target.value)}
-                        style={{ padding: '4px 8px', fontSize: '11px', border: `1px solid ${BORDER}`, borderRadius: '6px', backgroundColor: WHITE, color: DARK, maxWidth: '160px' }}>
-                        <option value="">— GL —</option>
-                        {glCodes.map(g => <option key={g.id} value={g.id}>{g.xero_account_code} · {g.name}</option>)}
-                      </select>
+                      <div style={{ display: 'grid', gap: '6px' }}>
+                        <input type="text" value={line.description ?? ''} onChange={e => updateLine(i, 'description', e.target.value)} placeholder="Description" style={cellInput} />
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+                          <input type="number" step="any"  value={line.quantity ?? ''}   onChange={e => updateLine(i, 'quantity', e.target.value)}   placeholder="Qty"   style={cellInput} />
+                          <input type="number" step="0.01" value={line.unit_price ?? ''} onChange={e => updateLine(i, 'unit_price', e.target.value)} placeholder="Unit"  style={cellInput} />
+                          <input type="number" step="0.01" value={line.line_total ?? ''} onChange={e => updateLine(i, 'line_total', e.target.value)} placeholder="Total" style={cellInput} />
+                        </div>
+                        <select value={line.gl_code_id ?? line.gl_codes?.id ?? ''} onChange={e => updateLine(i, 'gl_code_id', e.target.value)}
+                          style={{ ...cellInput, fontSize: '12px' }}>
+                          <option value="">— GL —</option>
+                          {glCodes.map(g => <option key={g.id} value={g.id}>{g.xero_account_code} · {g.name}</option>)}
+                        </select>
+                      </div>
                     ) : (
-                      <span style={{ fontSize: '11px', color: line.gl_codes ? OLIVE : MUTED }}>
-                        {line.gl_codes ? `${line.gl_codes.xero_account_code} · ${line.gl_codes.name}` : '— No GL'}
-                      </span>
+                      <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '13px', color: DARK, flex: 1, paddingRight: '8px' }}>{line.description}</span>
+                          <span style={{ fontSize: '13px', fontWeight: '600', color: DARK, flexShrink: 0 }}>{fmt(line.line_total)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '11px', color: MUTED }}>Qty: {line.quantity} × {fmt(line.unit_price)}</span>
+                          <span style={{ fontSize: '11px', color: line.gl_codes ? OLIVE : MUTED }}>
+                            {line.gl_codes ? `${line.gl_codes.xero_account_code} · ${line.gl_codes.name}` : '— No GL'}
+                          </span>
+                        </div>
+                      </>
                     )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
               <div style={{ padding: '8px 14px', backgroundColor: LIGHT, display: 'flex', justifyContent: 'flex-end', gap: '16px' }}>
                 <span style={{ fontSize: '11px', color: MUTED }}>Excl: {fmt(invoice.amount_excl)}</span>
                 <span style={{ fontSize: '11px', color: MUTED }}>VAT: {fmt(invoice.amount_vat)}</span>
@@ -311,10 +423,11 @@ export default function InvoiceDetailPage() {
             {showAudit && auditTrail.map((entry, i) => (
               <div key={entry.id} style={{ padding: '10px 14px', borderTop: `1px solid ${LIGHT}`, display: 'flex', gap: '10px' }}>
                 <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: AMBER, flexShrink: 0, marginTop: '5px' }} />
-                <div>
+                <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontSize: '12px', fontWeight: '600', color: DARK }}>{entry.from_status ? `${entry.from_status} → ${entry.to_status}` : entry.to_status}</div>
-                  <div style={{ fontSize: '11px', color: MUTED }}>{entry.actor_email} · {fmtDT(entry.created_at)}</div>
+                  <div style={{ fontSize: '11px', color: MUTED }}>{entry.actor_email ?? '—'} · {fmtDT(entry.created_at)}</div>
                   {entry.notes && <div style={{ fontSize: '12px', color: DARK, marginTop: '2px', fontStyle: 'italic' }}>{entry.notes}</div>}
+                  <AuditChanges metadata={entry.metadata} />
                 </div>
               </div>
             ))}
@@ -323,7 +436,11 @@ export default function InvoiceDetailPage() {
 
         {/* Sticky action buttons */}
         {canReview && (
-          <div style={{ position: 'fixed', bottom: '60px', left: 0, right: 0, padding: '10px 16px', backgroundColor: WHITE, borderTop: `1px solid ${BORDER}`, display: 'flex', gap: '10px', zIndex: 50 }}>
+          <div style={{ position: 'fixed', bottom: '60px', left: 0, right: 0, padding: '10px 16px', backgroundColor: WHITE, borderTop: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', gap: '8px', zIndex: 50 }}>
+            {errorMsg && (
+              <div style={{ padding: '8px 12px', backgroundColor: '#FEE2E2', color: RED, fontSize: '12px', borderRadius: '8px', border: `1px solid #FCA5A5` }}>{errorMsg}</div>
+            )}
+            <div style={{ display: 'flex', gap: '10px' }}>
             <button onClick={handleReject} disabled={submitting}
               style={{ flex: 1, padding: '13px', borderRadius: '10px', border: '2px solid #EF4444', backgroundColor: WHITE, color: RED, fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>
               Reject
@@ -332,6 +449,7 @@ export default function InvoiceDetailPage() {
               style={{ flex: 2, padding: '13px', borderRadius: '10px', border: 'none', backgroundColor: AMBER, color: WHITE, fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>
               {submitting ? 'Submitting...' : 'Submit for Approval →'}
             </button>
+            </div>
           </div>
         )}
       </AppShell>
@@ -354,7 +472,10 @@ export default function InvoiceDetailPage() {
               <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', backgroundColor: statusStyle.bg, color: statusStyle.color, fontSize: '11px', fontWeight: '600' }}>{statusStyle.label}</span>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {errorMsg && canReview && (
+              <span style={{ padding: '6px 10px', backgroundColor: '#FEE2E2', color: RED, fontSize: '12px', borderRadius: '6px', border: `1px solid #FCA5A5` }}>{errorMsg}</span>
+            )}
             {canReview && (
               <>
                 <button onClick={handleReject} disabled={submitting} style={{ padding: '8px 16px', borderRadius: '7px', border: '1.5px solid #EF4444', backgroundColor: WHITE, color: RED, fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Reject</button>
@@ -419,10 +540,11 @@ export default function InvoiceDetailPage() {
               {showAudit && auditTrail.map((entry, i) => (
                 <div key={entry.id} style={{ padding: '8px 12px', borderTop: `1px solid ${LIGHT}`, display: 'flex', gap: '8px' }}>
                   <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: AMBER, flexShrink: 0, marginTop: '4px' }} />
-                  <div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ fontSize: '11px', fontWeight: '600', color: DARK }}>{entry.from_status ? `${entry.from_status} → ${entry.to_status}` : entry.to_status}</div>
-                    <div style={{ fontSize: '10px', color: MUTED }}>{entry.actor_email} · {fmtDT(entry.created_at)}</div>
+                    <div style={{ fontSize: '10px', color: MUTED }}>{entry.actor_email ?? '—'} · {fmtDT(entry.created_at)}</div>
                     {entry.notes && <div style={{ fontSize: '11px', color: DARK, fontStyle: 'italic', marginTop: '1px' }}>{entry.notes}</div>}
+                    <AuditChanges metadata={entry.metadata} />
                   </div>
                 </div>
               ))}
