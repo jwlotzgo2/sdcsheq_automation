@@ -45,6 +45,8 @@ export default function ReviewPage() {
   const [invoices, setInvoices]             = useState<any[]>([])
   const [selected, setSelected]             = useState<any>(null)
   const [lines, setLines]                   = useState<any[]>([])
+  const [originalLines, setOriginalLines]   = useState<any[]>([])
+  const [errorMsg, setErrorMsg]             = useState<string | null>(null)
   const [glCodes, setGlCodes]               = useState<any[]>([])
   const [suppliers, setSuppliers]           = useState<any[]>([])
   const [pdfUrl, setPdfUrl]                 = useState<string | null>(null)
@@ -109,6 +111,7 @@ export default function ReviewPage() {
 
     setSelected(inv)
     setLines(lineData ?? [])
+    setOriginalLines(JSON.parse(JSON.stringify(lineData ?? [])))
     setAuditTrail(audit ?? [])
     setSelectedSupplier(inv?.supplier_id ?? '')
 
@@ -188,12 +191,68 @@ export default function ReviewPage() {
     setFindingSupplier(false)
   }
 
+  const collectLineEdits = () => {
+    const origById = new Map(originalLines.map(l => [l.id, l]))
+    const edits: any[] = []
+    const cmpNum = (a: any, b: any) =>
+      (a == null && b == null) ||
+      (a != null && b != null && Number(a) === Number(b))
+    for (const line of lines) {
+      const orig = origById.get(line.id)
+      if (!orig) continue
+      const currentGl = line.gl_code_id ?? line.gl_codes?.id ?? null
+      const origGl = orig.gl_code_id ?? orig.gl_codes?.id ?? null
+      const fields: any = { id: line.id }
+      let changed = false
+      if ((line.description ?? '') !== (orig.description ?? '')) { fields.description = line.description; changed = true }
+      if (!cmpNum(line.quantity,   orig.quantity))   { fields.quantity   = line.quantity;   changed = true }
+      if (!cmpNum(line.unit_price, orig.unit_price)) { fields.unit_price = line.unit_price; changed = true }
+      if (!cmpNum(line.line_total, orig.line_total)) { fields.line_total = line.line_total; changed = true }
+      if (currentGl !== origGl) { fields.gl_code_id = currentGl || null; changed = true }
+      if (changed) edits.push(fields)
+    }
+    return edits
+  }
+
+  const callTransition = async (action: 'submit' | 'reject' | 'recall', noteOverride?: string) => {
+    if (!selected) return false
+    setErrorMsg(null)
+    setSubmitting(true)
+    try {
+      const body: any = {
+        action,
+        notes: (noteOverride ?? notes).trim() || undefined,
+      }
+      if (action === 'submit') {
+        body.supplier_id = selectedSupplier || null
+        const edits = collectLineEdits()
+        if (edits.length > 0) body.lines = edits
+      }
+      const res = await fetch(`/api/invoices/${selected.id}/transition`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setErrorMsg(data.error ?? 'Action failed')
+        setSubmitting(false)
+        return false
+      }
+      return true
+    } catch (err: any) {
+      setErrorMsg(err.message ?? 'Network error')
+      setSubmitting(false)
+      return false
+    }
+  }
+
   const handleSubmit = async () => {
     if (!selected) return
-    setSubmitting(true)
     const user = (await supabase.auth.getUser()).data.user
 
-    // Log supplier correction if changed
+    // Log corrections as user-scoped audit signals — kept as direct inserts
+    // since these tables are append-only learning logs, not part of state.
     if (selectedSupplier && selectedSupplier !== selected.supplier_id) {
       await supabase.from('supplier_corrections').insert({
         invoice_id:    selected.id,
@@ -202,14 +261,6 @@ export default function ReviewPage() {
         corrected_by:  user?.email,
       })
     }
-
-    await supabase.from('invoices').update({
-      status: 'PENDING_APPROVAL',
-      supplier_id: selectedSupplier || null,
-      notes: notes || selected.notes,
-    }).eq('id', selected.id)
-
-    // Save line items and log GL corrections
     for (const line of lines) {
       const newGlId = line.gl_code_id ?? line.gl_codes?.id
       const origGlId = line.gl_codes?.id
@@ -223,50 +274,38 @@ export default function ReviewPage() {
           corrected_by:     user?.email,
         })
       }
-      await supabase.from('invoice_line_items').update({ gl_code_id: newGlId }).eq('id', line.id)
     }
 
-    await supabase.from('audit_trail').insert({
-      invoice_id: selected.id, from_status: selected.status, to_status: 'PENDING_APPROVAL',
-      actor_email: user?.email,
-      notes: notes || 'Submitted for approval',
-    })
+    const ok = await callTransition('submit')
+    if (!ok) return
+
     const remaining = invoices.filter(i => i.id !== selected.id)
     setInvoices(remaining)
     setSubmitting(false)
     if (isMobile) setMobileView('list')
     if (remaining.length > 0) { if (!isMobile) selectInvoice(remaining[0].id) }
-    else { setSelected(null); setLines([]) }
+    else { setSelected(null); setLines([]); setOriginalLines([]) }
   }
 
   const handleReject = async () => {
     if (!selected) return
-    if (!notes) { alert('Please add a rejection reason.'); return }
-    setSubmitting(true)
-    await supabase.from('invoices').update({ status: 'REJECTED', rejection_reason: notes }).eq('id', selected.id)
-    await supabase.from('audit_trail').insert({
-      invoice_id: selected.id, from_status: selected.status, to_status: 'REJECTED',
-      actor_email: (await supabase.auth.getUser()).data.user?.email, notes,
-    })
+    if (!notes.trim()) { setErrorMsg('Please add a rejection reason.'); return }
+    const ok = await callTransition('reject')
+    if (!ok) return
+
     const remaining = invoices.filter(i => i.id !== selected.id)
     setInvoices(remaining)
     setSubmitting(false)
     if (isMobile) setMobileView('list')
     if (remaining.length > 0) { if (!isMobile) selectInvoice(remaining[0].id) }
-    else { setSelected(null); setLines([]) }
+    else { setSelected(null); setLines([]); setOriginalLines([]) }
   }
 
   const handleRecall = async () => {
     if (!selected || !['PENDING_APPROVAL', 'APPROVED'].includes(selected.status)) return
-    setSubmitting(true)
-    const user = (await supabase.auth.getUser()).data.user
-    await supabase.from('invoices').update({ status: 'IN_REVIEW' }).eq('id', selected.id)
-    await supabase.from('audit_trail').insert({
-      invoice_id: selected.id, from_status: selected.status, to_status: 'IN_REVIEW',
-      actor_email: user?.email, notes: `Recalled by reviewer from ${selected.status}`,
-    })
+    const ok = await callTransition('recall', `Recalled from ${selected.status}`)
+    if (!ok) return
     setSubmitting(false)
-    // Move invoice from completed back to queue
     setCompletedInvoices(prev => prev.filter(i => i.id !== selected.id))
     const recalled = { ...selected, status: 'IN_REVIEW' }
     setInvoices(prev => [recalled, ...prev])
@@ -413,26 +452,36 @@ export default function ReviewPage() {
                   </select>
                 </div>
 
-                {/* Line items */}
+                {/* Line items — editable */}
                 <div style={{ backgroundColor: WHITE, borderRadius: '10px', border: `1px solid ${BORDER}`, overflow: 'hidden', marginBottom: '12px' }}>
-                  <div style={{ padding: '12px 16px', borderBottom: `1px solid ${BORDER}`, fontSize: '11px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Line Items</div>
-                  {lines.map((line, i) => (
-                    <div key={line.id} style={{ padding: '12px 16px', borderBottom: i < lines.length - 1 ? `1px solid ${LIGHT}` : 'none' }}>
-                      <div style={{ fontSize: '13px', color: DARK, marginBottom: '6px' }}>{line.description}</div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                        <span style={{ fontSize: '12px', color: MUTED }}>Qty {line.quantity} × {fmt(line.unit_price)}</span>
-                        <span style={{ fontSize: '13px', fontWeight: '600', color: DARK }}>{fmt(line.line_total)}</span>
+                  <div style={{ padding: '12px 16px', borderBottom: `1px solid ${BORDER}`, fontSize: '11px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Line Items <span style={{ marginLeft: '6px', textTransform: 'none', fontWeight: '500' }}>· values are excl. VAT</span>
+                  </div>
+                  {lines.map((line, i) => {
+                    const cellInput: React.CSSProperties = {
+                      width: '100%', padding: '6px 8px', fontSize: '13px',
+                      border: `1px solid ${BORDER}`, borderRadius: '6px', backgroundColor: WHITE,
+                      color: DARK, boxSizing: 'border-box', fontFamily: 'inherit',
+                    }
+                    return (
+                      <div key={line.id} style={{ padding: '12px 16px', borderBottom: i < lines.length - 1 ? `1px solid ${LIGHT}` : 'none', display: 'grid', gap: '6px' }}>
+                        <input type="text" value={line.description ?? ''} onChange={e => updateLine(i, 'description', e.target.value)} placeholder="Description" style={cellInput} />
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+                          <input type="number" step="any"  value={line.quantity ?? ''}   onChange={e => updateLine(i, 'quantity', e.target.value)}   placeholder="Qty"   style={cellInput} />
+                          <input type="number" step="0.01" value={line.unit_price ?? ''} onChange={e => updateLine(i, 'unit_price', e.target.value)} placeholder="Unit"  style={cellInput} />
+                          <input type="number" step="0.01" value={line.line_total ?? ''} onChange={e => updateLine(i, 'line_total', e.target.value)} placeholder="Total" style={cellInput} />
+                        </div>
+                        <select
+                          value={line.gl_code_id ?? line.gl_codes?.id ?? ''}
+                          onChange={e => updateLine(i, 'gl_code_id', e.target.value)}
+                          style={{ ...cellInput, fontSize: '12px' }}
+                        >
+                          <option value="">— GL code —</option>
+                          {glCodes.map(g => <option key={g.id} value={g.id}>{g.xero_account_code} · {g.name}</option>)}
+                        </select>
                       </div>
-                      <select
-                        value={line.gl_code_id ?? line.gl_codes?.id ?? ''}
-                        onChange={e => updateLine(i, 'gl_code_id', e.target.value)}
-                        style={{ width: '100%', padding: '8px', fontSize: '13px', border: `1px solid ${BORDER}`, borderRadius: '6px', backgroundColor: WHITE, color: DARK }}
-                      >
-                        <option value="">— GL code —</option>
-                        {glCodes.map(g => <option key={g.id} value={g.id}>{g.xero_account_code} · {g.name}</option>)}
-                      </select>
-                    </div>
-                  ))}
+                    )
+                  })}
                   <div style={{ padding: '10px 16px', backgroundColor: LIGHT, display: 'flex', justifyContent: 'flex-end', gap: '16px' }}>
                     <span style={{ fontSize: '12px', color: MUTED }}>VAT: {fmt(selected.amount_vat)}</span>
                     <span style={{ fontSize: '13px', fontWeight: '700', color: DARK }}>Total: {fmt(selected.amount_incl)}</span>
@@ -449,13 +498,18 @@ export default function ReviewPage() {
             )}
 
             {/* Sticky action buttons */}
-            <div style={{ position: 'fixed', bottom: '60px', left: 0, right: 0, padding: '12px 16px', backgroundColor: WHITE, borderTop: `1px solid ${BORDER}`, display: 'flex', gap: '10px', zIndex: 50 }}>
-              <button onClick={handleReject} disabled={submitting} style={{ flex: 1, padding: '14px', borderRadius: '10px', border: '2px solid #EF4444', backgroundColor: WHITE, color: '#EF4444', fontSize: '15px', fontWeight: '700', cursor: 'pointer' }}>
-                Reject
-              </button>
-              <button onClick={handleSubmit} disabled={submitting} style={{ flex: 2, padding: '14px', borderRadius: '10px', border: 'none', backgroundColor: AMBER, color: WHITE, fontSize: '15px', fontWeight: '700', cursor: 'pointer' }}>
-                {submitting ? 'Submitting...' : 'Submit for Approval →'}
-              </button>
+            <div style={{ position: 'fixed', bottom: '60px', left: 0, right: 0, padding: '12px 16px', backgroundColor: WHITE, borderTop: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', gap: '8px', zIndex: 50 }}>
+              {errorMsg && (
+                <div style={{ padding: '8px 12px', backgroundColor: '#FEE2E2', color: '#EF4444', fontSize: '12px', borderRadius: '8px', border: `1px solid #FCA5A5` }}>{errorMsg}</div>
+              )}
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button onClick={handleReject} disabled={submitting} style={{ flex: 1, padding: '14px', borderRadius: '10px', border: '2px solid #EF4444', backgroundColor: WHITE, color: '#EF4444', fontSize: '15px', fontWeight: '700', cursor: 'pointer' }}>
+                  Reject
+                </button>
+                <button onClick={handleSubmit} disabled={submitting} style={{ flex: 2, padding: '14px', borderRadius: '10px', border: 'none', backgroundColor: AMBER, color: WHITE, fontSize: '15px', fontWeight: '700', cursor: 'pointer' }}>
+                  {submitting ? 'Submitting...' : 'Submit for Approval →'}
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -485,7 +539,10 @@ export default function ReviewPage() {
             <p style={{ fontSize: '12px', color: MUTED, margin: 0 }}>{invoices.length} invoice{invoices.length !== 1 ? 's' : ''} awaiting review</p>
           </div>
           {selected && (
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {errorMsg && (
+                <span style={{ padding: '6px 10px', backgroundColor: '#FEE2E2', color: '#EF4444', fontSize: '12px', borderRadius: '6px', border: `1px solid #FCA5A5` }}>{errorMsg}</span>
+              )}
               {isRecallable ? (
                 <button onClick={handleRecall} disabled={submitting} style={{ padding: '7px 16px', borderRadius: '7px', border: '1.5px solid #F97316', backgroundColor: WHITE, color: '#F97316', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
                   {submitting ? 'Recalling...' : 'Recall for Editing'}
@@ -647,28 +704,35 @@ export default function ReviewPage() {
                   </div>
                 </div>
 
-                {/* Line items — compact */}
+                {/* Line items — compact, editable */}
                 <div style={{ backgroundColor: WHITE, borderRadius: '8px', border: `1px solid ${BORDER}`, overflow: 'hidden', flexShrink: 0 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '2fr 40px 80px 80px 170px', padding: '6px 12px', backgroundColor: LIGHT, borderBottom: `1px solid ${BORDER}` }}>
-                    {['Description', 'Qty', 'Unit', 'Total', 'GL Code'].map(h => (
+                    {['Description', 'Qty', 'Unit (excl)', 'Total (excl)', 'GL Code'].map(h => (
                       <div key={h} style={{ fontSize: '9px', fontWeight: '600', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
                     ))}
                   </div>
-                  {lines.map((line, i) => (
-                    <div key={line.id} style={{ display: 'grid', gridTemplateColumns: '2fr 40px 80px 80px 170px', padding: '6px 12px', borderBottom: i < lines.length - 1 ? `1px solid ${LIGHT}` : 'none', alignItems: 'center' }}>
-                      <div style={{ fontSize: '11px', color: DARK, paddingRight: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={line.description}>{line.description}</div>
-                      <div style={{ fontSize: '11px', color: DARK }}>{line.quantity}</div>
-                      <div style={{ fontSize: '11px', color: DARK }}>{fmt(line.unit_price)}</div>
-                      <div style={{ fontSize: '11px', fontWeight: '500', color: DARK }}>{fmt(line.line_total)}</div>
-                      <SearchableSelect
-                        compact
-                        value={line.gl_code_id ?? line.gl_codes?.id ?? ''}
-                        onChange={v => updateLine(i, 'gl_code_id', v)}
-                        options={glCodes.map(g => ({ value: g.id, label: `${g.xero_account_code} · ${g.name}` }))}
-                        placeholder="— GL —"
-                      />
-                    </div>
-                  ))}
+                  {lines.map((line, i) => {
+                    const cellInput: React.CSSProperties = {
+                      width: '100%', padding: '3px 5px', fontSize: '11px',
+                      border: `1px solid ${BORDER}`, borderRadius: '4px', backgroundColor: WHITE,
+                      color: DARK, boxSizing: 'border-box', fontFamily: 'inherit',
+                    }
+                    return (
+                      <div key={line.id} style={{ display: 'grid', gridTemplateColumns: '2fr 40px 80px 80px 170px', gap: '4px', padding: '6px 12px', borderBottom: i < lines.length - 1 ? `1px solid ${LIGHT}` : 'none', alignItems: 'center' }}>
+                        <input type="text"   value={line.description ?? ''} onChange={e => updateLine(i, 'description', e.target.value)} style={cellInput} />
+                        <input type="number" step="any"  value={line.quantity ?? ''}   onChange={e => updateLine(i, 'quantity', e.target.value)}   style={cellInput} />
+                        <input type="number" step="0.01" value={line.unit_price ?? ''} onChange={e => updateLine(i, 'unit_price', e.target.value)} style={cellInput} />
+                        <input type="number" step="0.01" value={line.line_total ?? ''} onChange={e => updateLine(i, 'line_total', e.target.value)} style={cellInput} />
+                        <SearchableSelect
+                          compact
+                          value={line.gl_code_id ?? line.gl_codes?.id ?? ''}
+                          onChange={v => updateLine(i, 'gl_code_id', v)}
+                          options={glCodes.map(g => ({ value: g.id, label: `${g.xero_account_code} · ${g.name}` }))}
+                          placeholder="— GL —"
+                        />
+                      </div>
+                    )
+                  })}
                   <div style={{ padding: '5px 12px', borderTop: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'flex-end', gap: '16px', backgroundColor: LIGHT }}>
                     <span style={{ fontSize: '10px', color: MUTED }}>Excl: {fmt(selected.amount_excl)}</span>
                     <span style={{ fontSize: '10px', color: MUTED }}>VAT: {fmt(selected.amount_vat)}</span>

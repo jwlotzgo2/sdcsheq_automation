@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { requireRole } from '@/lib/auth/require-role'
 
-type Action = 'submit' | 'reject' | 'approve' | 'return'
+type Action = 'submit' | 'reject' | 'approve' | 'return' | 'recall'
 
 type LineEdit = {
   id: string
@@ -31,6 +31,7 @@ const ACTION_CONFIG: Record<Action, {
   reject:  { minRole: 'AP_CLERK', toStatus: 'REJECTED',         allowedFrom: ['PENDING_REVIEW', 'IN_REVIEW', 'RETURNED', 'PENDING_APPROVAL'], requiresNote: true },
   approve: { minRole: 'APPROVER', toStatus: 'APPROVED',         allowedFrom: ['PENDING_APPROVAL'], requiresNote: false },
   return:  { minRole: 'APPROVER', toStatus: 'RETURNED',         allowedFrom: ['PENDING_APPROVAL'], requiresNote: true },
+  recall:  { minRole: 'AP_CLERK', toStatus: 'IN_REVIEW',        allowedFrom: ['PENDING_APPROVAL', 'APPROVED'], requiresNote: false },
 }
 
 export async function POST(
@@ -162,6 +163,7 @@ export async function POST(
     reject:  'Rejected',
     approve: 'Approved',
     return:  'Returned to reviewer',
+    recall:  'Recalled by reviewer for editing',
   }
 
   const noteText = summary.length > 0
