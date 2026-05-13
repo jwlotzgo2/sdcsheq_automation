@@ -14,6 +14,38 @@ const MUTED  = '#8A8878'
 const WHITE  = '#FFFFFF'
 const RED    = '#EF4444'
 
+// ── Image preprocessing ──────────────────────────────────────────
+// Phone cameras produce 4–5 MB JPEGs at 4000+px which exceed the
+// Anthropic /messages 5 MB-per-image cap and Vercel's 4.5 MB request
+// body cap. Downscale to a long edge of 1568 px (Anthropic's optimal
+// dimension) and re-encode as JPEG before upload + extract. Falls
+// through unchanged for PDFs and any image we can't decode (e.g. HEIC
+// in a non-Safari browser — surfaces as a clean extract error rather
+// than a corrupt request).
+async function processReceiptFile(input: File): Promise<File> {
+  if (input.type === 'application/pdf' || !input.type.startsWith('image/')) {
+    return input
+  }
+  try {
+    const bitmap = await createImageBitmap(input)
+    const maxDim = 1568
+    const scale  = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height))
+    const w = Math.max(1, Math.round(bitmap.width  * scale))
+    const h = Math.max(1, Math.round(bitmap.height * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width  = w
+    canvas.height = h
+    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, w, h)
+    const blob = await new Promise<Blob | null>(resolve =>
+      canvas.toBlob(b => resolve(b), 'image/jpeg', 0.85)
+    )
+    if (!blob) return input
+    return new File([blob], `receipt-${Date.now()}.jpg`, { type: 'image/jpeg' })
+  } catch {
+    return input
+  }
+}
+
 // ── Capture Form — external memo, owns all its state ─────────────
 const CaptureForm = memo(function CaptureForm({ glCodes, costCentres, userEmail, onSubmit, submitting }: {
   glCodes: any[]; costCentres: any[]; userEmail: string
@@ -42,8 +74,9 @@ const CaptureForm = memo(function CaptureForm({ glCodes, costCentres, userEmail,
   )
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]
-    if (!f) return
+    const original = e.target.files?.[0]
+    if (!original) return
+    const f = await processReceiptFile(original)
     setFile(f)
     setPreview(URL.createObjectURL(f))
     setExtracted(false)
@@ -55,6 +88,7 @@ const CaptureForm = memo(function CaptureForm({ glCodes, costCentres, userEmail,
       formData.append('file', f)
       const res  = await fetch('/api/expenses/extract', { method: 'POST', body: formData })
       const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'extract failed')
       if (data.vendor_name)  setVendorName(data.vendor_name)
       if (data.receipt_date) setReceiptDate(data.receipt_date)
       if (data.amount_excl)  setAmountExcl(String(data.amount_excl))

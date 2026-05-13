@@ -77,7 +77,7 @@ ${glList}
     })
 
     const response = await client.messages.create({
-      model: 'claude-opus-4-5',
+      model: 'claude-sonnet-4-5',
       max_tokens: 500,
       messages: [{ role: 'user', content }],
     })
@@ -94,7 +94,12 @@ ${glList}
 
     return NextResponse.json(parsed)
   } catch (err: any) {
-    console.error('[expense-extract]', err.message)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    // Anthropic SDK surfaces the API body on err.error; log it verbatim so
+    // we can see why the request was rejected next time (4xx truncation in
+    // Vercel's log viewer drops everything after the first JSON key).
+    const status = err?.status ?? err?.statusCode
+    const body   = err?.error ? JSON.stringify(err.error) : null
+    console.error('[expense-extract] status=%s message=%s body=%s', status, err?.message, body)
+    return NextResponse.json({ error: err?.message || 'extract failed' }, { status: 500 })
   }
 }
