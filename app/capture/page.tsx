@@ -239,21 +239,20 @@ export default function CapturePage() {
   const handleSubmit = async (data: any, file: File) => {
     setSubmitting(true)
     try {
-      // Upload file to Supabase storage
+      // Upload file to Supabase storage (private 'invoices' bucket)
       const ext      = file.name.split('.').pop()
       const fileName = `expenses/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('invoices')
         .upload(fileName, file, { contentType: file.type })
       if (uploadError) throw new Error(uploadError.message)
-
-      const { data: { publicUrl } } = supabase.storage.from('invoices').getPublicUrl(fileName)
 
       // Create invoice record as EXPENSE type
       const { data: invoice, error: invoiceError } = await supabase
         .from('invoices')
         .insert({
           record_type:    'EXPENSE',
+          source:         'MOBILE_CAPTURE',
           status:         'PENDING_REVIEW',
           supplier_name:  data.vendor_name,
           invoice_date:   data.receipt_date || new Date().toISOString().split('T')[0],
@@ -264,7 +263,7 @@ export default function CapturePage() {
           cost_centre_id: data.cost_centre_id,
           client_name:    data.client_name,
           notes:          data.notes,
-          pdf_url:        publicUrl,
+          storage_path:   `invoices/${fileName}`,
           currency:       'ZAR',
         })
         .select('id')
