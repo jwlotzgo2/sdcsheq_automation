@@ -273,7 +273,11 @@ export default function CapturePage() {
   const handleSubmit = async (data: any, file: File) => {
     setSubmitting(true)
     try {
-      // Upload file to Supabase storage (private 'invoices' bucket)
+      // Upload file to Supabase storage (private 'invoices' bucket). The
+      // storage_authenticated_insert policy lets the browser do this
+      // directly; the DB write goes through the server route below
+      // because invoices/audit_trail have no INSERT policy for
+      // authenticated.
       const ext      = file.name.split('.').pop()
       const fileName = `expenses/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
       const { error: uploadError } = await supabase.storage
@@ -281,50 +285,24 @@ export default function CapturePage() {
         .upload(fileName, file, { contentType: file.type })
       if (uploadError) throw new Error(uploadError.message)
 
-      // Create invoice record as EXPENSE type
-      const { data: invoice, error: invoiceError } = await supabase
-        .from('invoices')
-        .insert({
-          record_type:    'EXPENSE',
-          source:         'MOBILE_CAPTURE',
-          status:         'PENDING_REVIEW',
-          supplier_name:  data.vendor_name,
-          invoice_date:   data.receipt_date || new Date().toISOString().split('T')[0],
+      const res = await fetch('/api/expenses/submit', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vendor_name:    data.vendor_name,
+          receipt_date:   data.receipt_date,
           amount_excl:    data.amount_excl,
           amount_vat:     data.amount_vat,
           amount_incl:    data.amount_incl,
-          submitted_by:   data.submitted_by,
+          gl_code_id:     data.gl_code_id,
           cost_centre_id: data.cost_centre_id,
           client_name:    data.client_name,
           notes:          data.notes,
           storage_path:   `invoices/${fileName}`,
-          currency:       'ZAR',
-        })
-        .select('id')
-        .single()
-
-      if (invoiceError) throw new Error(invoiceError.message)
-
-      // Add GL code as line item if provided
-      if (data.gl_code_id && invoice) {
-        await supabase.from('invoice_line_items').insert({
-          invoice_id:  invoice.id,
-          description: data.notes || data.vendor_name,
-          line_total:  data.amount_excl || data.amount_incl,
-          vat_rate:    data.amount_vat ? 15 : 0,
-          gl_code_id:  data.gl_code_id,
-          sort_order:  0,
-        })
-      }
-
-      // Audit trail
-      await supabase.from('audit_trail').insert({
-        invoice_id:  invoice.id,
-        from_status: null,
-        to_status:   'PENDING_REVIEW',
-        actor_email: data.submitted_by,
-        notes:       `Expense submitted by ${data.submitted_by}`,
+        }),
       })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Failed to save expense')
 
       setSuccess(true)
     } catch (err: any) {
